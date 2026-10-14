@@ -1,0 +1,60 @@
+{
+  "boomer": {
+    "assets": {
+      "phase_1": [
+        {"name": "Blue-Chip Stocks", "min_gain": 0.15, "max_gain": 0.80, "max_loss": -0.15, "success": 0.75},
+        {"name": "Precious Gold Bars", "min_gain": 0.10, "max_gain": 0.80, "max_loss": -0.05, "success": 0.90},
+        {"name": "Private Equity Fund", "min_gain": 0.20, "max_gain": 0.60, "max_loss": -0.95, "success": 0.15},
+        {"name": "Buy Up Residential Housing", "min_gain": 0.30, "max_gain": 0.75, "max_loss": -0.25, "success": 0.70},
+        {"name": "Collect Vintage Cars", "min_gain": 0.15, "max_gain": 0.65, "max_loss": -0.50, "success": 0.50},
+        {"name": "Municipal Bonds", "min_gain": 0.2, "max_gain": 0.80, "max_loss": -0.15, "success": 0.80},
+        {"name": "Invest in Oil Stocks", "min_gain": 0.25, "max_gain": 0.75, "max_loss": -0.10, "success": 0.85},
+        {"name": "Buy Gold and Silver Eagle Coins", "min_gain": 0.2, "max_gain": 0.5, "max_loss": -1.0, "success": 0.40},
+        {"name": "Buy a Fast Food Franchise", "min_gain": 0.20, "max_gain": 0.8, "max_loss": -0.90, "success": 0.05},
+        {"name": "Luxury Downtown Real Estate", "min_gain": 0.15, "max_gain": 0.65, "max_loss": -0.50, "success": 0.50},
+        {"name": "Section-8 Rental Property", "min_gain": 0.2, "max_gain": 0.80, "max_loss": -0.15, "success": 0.80},
+        {"name": "Raise Rent on the Poor", "min_gain": 0.25, "max_gain": 0.75, "max_loss": -0.10, "success": 0.85},
+        {"name": "Provide Predatory Student Loans", "min_gain": 0.2, "max_gain": 0.5, "max_loss": -1.0, "success": 0.40},
+        {"name": "Invest in Private Prisons", "min_gain": 0.20, "max_gain": 0.8, "max_loss": -0.90, "success": 0.05}
+      ]
+    },
+    "scams": [
+      {"name": "Nigerian Prince Email", "loss": 50000, "chance": 0.4},
+      {"name": "Computer Virus Support Call", "loss": 50000, "chance": 0.5},
+      {"name": "Grandchild Emergency Wire", "loss": 100000, "chance": 0.4},
+      {"name": "Fake IRS Call", "loss": 50000, "chance": 0.5},
+      {"name": "Fake Medicare Supplement Offer", "loss": 75000, "chance": 0.6},
+      {"name": "Home Repair Scam", "loss": 100000, "chance": 0.8},
+      {"name": "Malicious Wi-Fi at Coffee Shop", "loss": 125000, "chance": 0.6},
+      {"name": "Fake Celebrity Charity", "loss": 100000, "chance": 0.5}
+    ]
+  },
+  "zoomer": {
+    "assets": {
+      "phase_1": [
+        {"name": "Meme Coin Crypto Moonshot", "min_gain": 100.0, "max_gain": 250.0, "max_loss": -0.99, "success": 0.08},
+        {"name": "Multi-Token Blockchain Arbitrage", "min_gain": 50.0, "max_gain": 100.0, "max_loss": -0.80, "success": 0.11},
+        {"name": "Sneaker Reselling", "min_gain": 20.0, "max_gain": 50.0, "max_loss": -0.40, "success": 0.05},
+        {"name": "Social Media Monetization", "min_gain": 80.0, "max_gain": 150.0, "max_loss": -0.70, "success": 0.13},
+        {"name": "E-Sports Team Stake", "min_gain": 40.0, "max_gain": 80.0, "max_loss": -0.60, "success": 0.08},
+        {"name": "Skincare Influencer Kit", "min_gain": 50.0, "max_gain": 120.0, "max_loss": -0.90, "success": 0.12},
+        {"name": "Rare Trading Cards", "min_gain": 150.0, "max_gain": 250.0, "max_loss": -0.95, "success": 0.14},
+        {"name": "Selling NFTs of Sumo Wrestlers", "min_gain": 30.0, "max_gain": 60.0, "max_loss": -0.20, "success": 0.12},
+        {"name": "Ghost Kitchen Franchise", "min_gain": 50.0, "max_gain": 100.0, "max_loss": -0.50, "success": 0.15},
+        {"name": "Putting a Card Skimmer at a 7-11", "min_gain": 30.0, "max_gain": 60.0, "max_loss": -0.20, "success": 0.12},
+        {"name": "Operating a Phishing Scam", "min_gain": 50.0, "max_gain": 100.0, "max_loss": -0.50, "success": 0.15},
+        {"name": "Operating a Web3 Ponzi Scheme", "min_gain": 50.0, "max_gain": 100.0, "max_loss": -0.50, "success": 0.15},
+        {"name": "Crypto Yield Farming", "min_gain": 30.0, "max_gain": 60.0, "max_loss": -0.20, "success": 0.12},
+        {"name": "AirBnB Arbitrage", "min_gain": 50.0, "max_gain": 100.0, "max_loss": -0.50, "success": 0.15}
+      ]
+    },
+    "scams": [
+      {"name": "NFT Discord Rugpull", "loss": 300, "chance": 0.10},
+      {"name": "Fake Job Interview", "loss": 100, "chance": 0.15},
+      {"name": "Crypto Exchange Hack", "loss": 200, "chance": 0.10},
+      {"name": "Fake Crowdfunding Campaign", "loss": 300, "chance": 0.10},
+      {"name": "Fake Streaming Subscription", "loss": 100, "chance": 0.15},
+      {"name": "Pyramid Scheme Recruitment", "loss": 100, "chance": 0.10}
+    ]
+  }
+}

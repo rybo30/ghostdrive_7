@@ -1,0 +1,22 @@
+# Core AI & Inference
+llama-cpp-python
+numpy
+
+# GUI & Data Visualization
+PySide6
+pyqtgraph
+
+# Security & System Utilities
+cryptography
+psutil
+diskcache
+
+# Networking & Document Parsing
+requests
+pypdf
+jinja2
+PyYAML
+beautifulsoup4
+
+# Build & Deployment Tools
+pyinstaller
