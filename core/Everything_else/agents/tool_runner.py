@@ -9,7 +9,7 @@ import importlib.util
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Union
 
-from core.paths import AGENT_TOOLS_DIR, USB_TOOLS_DIR, EVERYTHING_ELSE
+from core.paths import AGENT_TOOLS_DIR, USB_TOOLS_DIR, EVERYTHING_ELSE, HOST_HIDDEN_DIR
 from core.Everything_else.agents.ram_manager import RAMManager
 
 logging.basicConfig(level=logging.INFO)
@@ -146,7 +146,9 @@ class AgentToolRunner:
 
         return final_responses
 
-    def process_proactive_pulse(
+
+
+    def process_autonomous_workshop(
         self, 
         chat_history: List[Dict[str, str]], 
         user_profile: Dict[str, Any],
@@ -155,100 +157,186 @@ class AgentToolRunner:
         system_prompt: str = "",
         allowed_tools: Optional[List[str]] = None
     ) -> Optional[str]:
-        """Algorithm 2: Independent proactive algorithm for autonomous background outreach."""
+        """
+        6-Stage Proactive Autonomous Pipeline:
+        1. Load Projects & Past Proactive Memory (State Cycling)
+        2. Synthesize Recent Conversation Context
+        3. Strategic Action & Tool Decision
+        4. Tool Execution
+        5. Proofread & Format Output
+        6. Persist Session State for Next Cycle
+        """
         current_time_str = datetime.now().strftime("%A, %B %d, %Y at %I:%M %p")
         self.registry.load_tools()
 
-        # Step 1: Evaluates projects, profile, and context to construct a proactive goal
-        intent_data = self._stage_1_proactive_intent(
-            chat_history=chat_history,
-            user_profile=user_profile,
-            active_projects=active_projects,
-            current_time_str=current_time_str,
-            model_filename=model_filename
+        host_projects_dir = getattr(
+            __import__("core.paths", fromlist=["HOST_PROJECTS_DIR"]),
+            "HOST_PROJECTS_DIR",
+            os.path.join(HOST_HIDDEN_DIR, "projects")
         )
 
-        # Forced execution: Extract intent or fallback to default thoughtful check-in
-        intent = intent_data.get("intent") or "Provide a thoughtful status check-in based on user goals and active projects."
-        target_tools = intent_data.get("tools", [])
-    
-        if allowed_tools is not None:
-            target_tools = [t for t in target_tools if t in allowed_tools and t in self.registry.tools]
+        # --- STAGE 1: STATE & PROJECT INVENTORY (INCLUDING PAST PROACTIVE MEMORY) ---
+        logger.info("[Proactive Pipeline] Stage 1: Loading projects and past memory...")
+        projects_data = {}
+        if os.path.exists(host_projects_dir):
+            for entry in os.listdir(host_projects_dir):
+                proj_path = os.path.join(host_projects_dir, entry)
+                if os.path.isdir(proj_path):
+                    meta_file = os.path.join(proj_path, "project.json")
+                    memory_file = os.path.join(proj_path, "proactive_memory.json")
+                    
+                    proj_info = {}
+                    if os.path.exists(meta_file):
+                        try:
+                            with open(meta_file, "r", encoding="utf-8") as f:
+                                proj_info["meta"] = json.load(f)
+                        except Exception:
+                            pass
+                    
+                    # Load past proactive cycle memory for continuity (Stage 6 link)
+                    if os.path.exists(memory_file):
+                        try:
+                            with open(memory_file, "r", encoding="utf-8") as f:
+                                proj_info["past_memory"] = json.load(f)
+                        except Exception:
+                            pass
+                    
+                    projects_data[entry] = proj_info
 
-        # Step 2: Determine tool execution vs direct ping
-        if target_tools:
-            raw_output = self._stage_2_tool_workflow(
-                prompt=intent,
-                tools=target_tools,
-                intent=intent,
+        # --- STAGE 2: CONTEXT & HISTORY SYNTHESIS ---
+        logger.info("[Proactive Pipeline] Stage 2: Synthesizing conversation context...")
+        history_str = "\n".join([f"- {msg.get('role', 'user').capitalize()}: {msg.get('text', '')}" for msg in chat_history]) if chat_history else "No recent chat history."
+        
+        context_prompt = f"""You are analyzing recent user interactions to determine potential needs.
+Recent Chat History:
+{history_str}
+
+Provide a concise 2-sentence summary of the user's recent momentum, focus areas, and open loops."""
+        
+        try:
+            conversation_insight = self.ram_manager.generate_response(
+                prompt=context_prompt,
                 model_filename=model_filename,
-                current_time_str=current_time_str
-            )
-        else:
-            raw_output = self._stage_2_direct_response_workflow(
-                prompt=intent,
-                intent=intent,
-                system_prompt=system_prompt,
-                model_filename=model_filename,
-                current_time_str=current_time_str
-            )
+                max_tokens=256
+            ).strip()
+        except Exception:
+            conversation_insight = "User is maintaining standard operational workflow."
 
-        # Step 3: Persona proofreader & message partitioning
-        final_responses = self._stage_3_proofread_and_split(
-            prompt=intent,
-            draft_response=raw_output,
-            system_prompt=system_prompt,
-            model_filename=model_filename
-        )
+        # --- STAGE 3: STRATEGY & TOOL SELECTION ---
+        logger.info("[Proactive Pipeline] Stage 3: Determining strategy and required tools...")
+        available_specs = [t for t in self.registry.get_tool_summaries() if not allowed_tools or t["name"] in allowed_tools]
 
-        return "\n\n".join(final_responses) if final_responses else "Autonomous system check-in completed."
-
-    def _stage_1_proactive_intent(
-        self, 
-        chat_history: List[Dict[str, str]], 
-        user_profile: Dict[str, Any], 
-        active_projects: List[str], 
-        current_time_str: str,
-        model_filename: Optional[str]
-    ) -> Dict[str, Any]:
-        """Gives the AI full autonomous freedom to decide what proactive action to take for the user."""
-        prompt = f"""You are a fully autonomous AI agent. You have total creative freedom to decide what helpful, interesting, or valuable action to take for your user right now. 
-Do not feel constrained by projects or profiles. You can search the web for fascinating news, look up technology trends, check weather, analyze systems, draft documents, or research anything you believe would delight, inform, or assist the user.
-
-Current Date/Time: {current_time_str}
-
-Recent Conversation History:
-{json.dumps(chat_history[-6:] if chat_history else [], indent=2)}
+        strategy_prompt = f"""You are the Strategic Decision Engine for an autonomous AI partner.
+Current Time: {current_time_str}
+Active Projects & Past Memory: {json.dumps(projects_data, indent=2)}
+User Context Insight: {conversation_insight}
 
 Available Tools:
-{json.dumps(self.registry.get_tool_summaries(), indent=2)}
+{json.dumps(available_specs, indent=2)}
 
-Instructions:
-1. Think of a creative, useful, or interesting task or research objective you want to execute right now.
-2. Select any tool from your available tools if needed, or formulate a brilliant proactive check-in.
-3. Formulate your clear task description ("intent") and list any required tools.
+INSTRUCTIONS:
+Determine what proactive action should be taken right now to assist the user or advance their projects.
+If a tool is needed, specify the `tool_name` and exact `tool_args`. If no tool is needed, set `tool_name` to null.
 
 Respond STRICTLY in JSON:
 ```json
 {{
-  "intent": "Detailed description of the autonomous task, research query, or action you want to take",
-  "tools": ["tool_name"]
+  "thought": "Reasoning for the proactive step",
+  "target_project": "project_name_if_applicable",
+  "tool_name": "tool_name_or_null",
+  "tool_args": {{}},
+  "briefing_focus": "Key points to present to the user"
 }}
 ```"""
 
         try:
-            response = self.ram_manager.generate_response(
-                prompt=prompt,
+            strategy_res = self.ram_manager.generate_response(
+                prompt=strategy_prompt,
                 model_filename=model_filename,
-                max_tokens=384
+                max_tokens=512
             )
-            parsed = self._parse_json_action(response)
-            if isinstance(parsed, dict):
-                return parsed
+            strategy = self._parse_json_action(strategy_res) or {}
         except Exception as e:
-            logger.error(f"[Proactive Pulse] Stage 1 Error: {e}")
+            logger.error(f"[Proactive Pipeline] Stage 3 error: {e}")
+            strategy = {}
 
-        return {"intent": "Provide a thoughtful update, interesting insight, or helpful check-in for the user.", "tools": []}
+        tool_name = strategy.get("tool_name")
+        tool_args = strategy.get("tool_args", {})
+        target_project = strategy.get("target_project", "")
+        briefing_focus = strategy.get("briefing_focus", "Routine system and project check-in.")
+
+        # --- STAGE 4: EXECUTION ---
+        tool_output = "No tool executed."
+        if tool_name and tool_name in self.registry.tools:
+            logger.info(f"[Proactive Pipeline] Stage 4: Executing tool '{tool_name}' with args {tool_args}")
+            try:
+                tool_output = self.registry.execute_tool(tool_name, **tool_args)
+            except Exception as e:
+                tool_output = f"Tool execution failed: {str(e)}"
+
+        # --- STAGE 5: PROOFREADING & FORMATTING ---
+        logger.info("[Proactive Pipeline] Stage 5: Proofreading briefing for user...")
+        draft_prompt = f"""Synthesize a crisp, high-signal proactive briefing for the user based on the workshop execution.
+
+Briefing Focus: {briefing_focus}
+Tool Execution Result: {tool_output}
+Project States: {json.dumps(projects_data, indent=2)}
+
+STRICT RULES:
+- Zero motivational filler or fluff.
+- Focus strictly on facts, project status updates, and valuable insights.
+- Format cleanly for Telegram messaging.
+
+Briefing:"""
+
+        try:
+            draft_text = self.ram_manager.generate_response(
+                prompt=draft_prompt,
+                model_filename=model_filename,
+                max_tokens=self.max_tokens
+            ).strip()
+
+            final_responses = self._stage_3_proofread_and_split(
+                prompt="Proactive autonomous briefing",
+                draft_response=draft_text,
+                system_prompt=system_prompt,
+                model_filename=model_filename
+            )
+            final_message = "\n\n".join(final_responses)
+        except Exception as e:
+            logger.error(f"[Proactive Pipeline] Stage 5 error: {e}")
+            return None
+
+        # --- STAGE 6: STATE PERSISTENCE & CYCLING ---
+        logger.info("[Proactive Pipeline] Stage 6: Saving session state for next cycle...")
+        if target_project:
+            slug = re.sub(r'[-\s]+', '_', re.sub(r'[^\w\s-]', '', target_project.lower()).strip())
+            proj_folder = os.path.join(host_projects_dir, slug)
+            if os.path.exists(proj_folder):
+                memory_file = os.path.join(proj_folder, "proactive_memory.json")
+                session_record = {
+                    "timestamp": current_time_str,
+                    "focus": briefing_focus,
+                    "tool_used": tool_name,
+                    "tool_output": tool_output,
+                    "summary": final_message
+                }
+                try:
+                    history_log = []
+                    if os.path.exists(memory_file):
+                        with open(memory_file, "r", encoding="utf-8") as f:
+                            history_log = json.load(f)
+                    history_log.append(session_record)
+                    # Keep last 5 sessions for continuous rolling memory
+                    history_log = history_log[-5:]
+                    with open(memory_file, "w", encoding="utf-8") as f:
+                        json.dump(history_log, f, indent=2)
+                    logger.info(f"[Proactive Pipeline] Stage 6 complete: Saved memory to {slug}/proactive_memory.json")
+                except Exception as ex:
+                    logger.error(f"[Proactive Pipeline] Stage 6 save error: {ex}")
+
+        return final_message
+
 
 
 

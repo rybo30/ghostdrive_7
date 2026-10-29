@@ -1,6 +1,11 @@
 # Core AI & Inference
 llama-cpp-python
 numpy
+sounddevice
+scipy
+openai-whisper
+tiktoken
+torch
 
 # GUI & Data Visualization
 PySide6
@@ -14,6 +19,7 @@ diskcache
 # Networking & Document Parsing
 requests
 pypdf
+python-docx
 jinja2
 PyYAML
 beautifulsoup4

@@ -1,4 +1,4 @@
-# project_manager_tool.py
+# [project_manager_tool.py]
 
 import os
 import json
@@ -7,12 +7,11 @@ import logging
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
-from core.paths import EVERYTHING_ELSE, HOST_HIDDEN_DIR
+from core.paths import HOST_HIDDEN_DIR
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ProjectManagerTool")
 
-# Define Host Projects Directory
 HOST_PROJECTS_DIR = getattr(
     __import__("core.paths", fromlist=["HOST_PROJECTS_DIR"]),
     "HOST_PROJECTS_DIR",
@@ -21,228 +20,237 @@ HOST_PROJECTS_DIR = getattr(
 
 TOOL_SPEC = {
     "name": "project_manager_tool",
-    "description": "Manages, tracks, creates, updates, and inspects long-term user projects, goals, and ideas stored locally on the host system.",
+    "description": "Autonomous project and task manager. Pass a natural language instruction to initialize projects, list them, add tasks, or Mark Task Complete.",
     "parameters": {
         "type": "object",
         "properties": {
-            "action": {
+            "instruction": {
                 "type": "string",
-                "enum": ["create", "update", "list", "get", "add_note"],
-                "description": "Action to perform: 'create' a new project, 'update' status or details, 'list' active projects, 'get' details of a project, or 'add_note' to write project notes."
+                "description": "Natural language instruction detailing what to do (e.g., 'Mark Task Complete: Preprocessing for DataAnalysis', or 'Initialize project DataAnalysis, add 3 tasks: Preprocessing, Analysis')."
             },
             "project_name": {
                 "type": "string",
-                "description": "Name or title of the project."
-            },
-            "description": {
-                "type": "string",
-                "description": "Brief description, goals, or context for the project."
-            },
-            "status": {
-                "type": "string",
-                "enum": ["planning", "active", "paused", "completed"],
-                "description": "Current status of the project (default: 'planning')."
-            },
-            "note_content": {
-                "type": "string",
-                "description": "Content of the note, requirement, or update to append to project logs."
-            },
-            "tasks": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "List of action items, goals, or tasks associated with the project."
+                "description": "(Optional) Explicit target project name."
             }
         },
-        "required": ["action"]
+        "required": ["instruction"]
     }
 }
 
 
 def _slugify(name: str) -> str:
-    """Converts a project title into a clean directory slug."""
     slug = re.sub(r'[^\w\s-]', '', name.lower()).strip()
     return re.sub(r'[-\s]+', '_', slug)
 
 
 def _ensure_projects_dir() -> str:
-    """Ensures host project directory exists."""
     os.makedirs(HOST_PROJECTS_DIR, exist_ok=True)
     return HOST_PROJECTS_DIR
 
 
-def create_project(project_name: str, description: str = "", status: str = "planning", tasks: Optional[List[str]] = None) -> str:
-    """Creates a new project directory with metadata files."""
-    if not project_name:
-        return "Error: Project name is required to create a project."
+class DeterministicProjectManager:
+    """Parses natural language instructions deterministically via Python code without needing inner LLM calls."""
+    def __init__(self):
+        self.base_dir = _ensure_projects_dir()
 
-    base_dir = _ensure_projects_dir()
-    slug = _slugify(project_name)
-    project_path = os.path.join(base_dir, slug)
+    def _get_project_path(self, project_name: str) -> str:
+        slug = _slugify(project_name)
+        return os.path.join(self.base_dir, slug)
 
-    if os.path.exists(project_path):
-        return f"Project '{project_name}' already exists at {project_path}."
-
-    os.makedirs(project_path, exist_ok=True)
-
-    meta = {
-        "name": project_name,
-        "slug": slug,
-        "status": status,
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat(),
-        "description": description,
-        "tasks": tasks or []
-    }
-
-    meta_file = os.path.join(project_path, "project.json")
-    with open(meta_file, "w", encoding="utf-8") as f:
-        json.dump(meta, f, indent=2)
-
-    readme_file = os.path.join(project_path, "README.md")
-    with open(readme_file, "w", encoding="utf-8") as f:
-        f.write(f"# {project_name}\n\n")
-        f.write(f"**Status:** {status.capitalize()}\n")
-        f.write(f"**Created:** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
-        f.write(f"## Overview\n{description if description else 'No description provided.'}\n\n")
-        
-        if tasks:
-            f.write("## Initial Tasks\n")
-            for task in tasks:
-                f.write(f"- [ ] {task}\n")
-            f.write("\n")
-
-        f.write("## Notes & Progress\n- Project initialized.\n")
-
-    return f"Successfully created project '{project_name}' at '{project_path}'."
-
-
-def list_projects() -> str:
-    """Lists all tracked host projects and their statuses."""
-    base_dir = _ensure_projects_dir()
-    entries = os.listdir(base_dir)
-    projects = []
-
-    for entry in entries:
-        folder = os.path.join(base_dir, entry)
-        meta_file = os.path.join(folder, "project.json")
-        if os.path.isdir(folder) and os.path.exists(meta_file):
+    def _load_meta(self, project_path: str) -> Optional[Dict[str, Any]]:
+        meta_file = os.path.join(project_path, "project.json")
+        if os.path.exists(meta_file):
             try:
                 with open(meta_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    projects.append(data)
+                    return json.load(f)
             except Exception:
-                continue
+                pass
+        return None
 
-    if not projects:
-        return "No projects currently tracked."
+    def _save_meta(self, project_path: str, meta: Dict[str, Any]):
+        meta_file = os.path.join(project_path, "project.json")
+        meta["updated_at"] = datetime.now().isoformat()
+        with open(meta_file, "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2)
 
-    output = ["Tracked Projects:"]
-    for p in projects:
-        output.append(f"- **{p.get('name')}** (`{p.get('slug')}`): Status = {p.get('status', 'N/A')} | Tasks = {len(p.get('tasks', []))}")
+    def _update_readme_tasks(self, project_path: str, tasks: List[Dict[str, Any]], description: str):
+        readme_file = os.path.join(project_path, "README.md")
+        meta = self._load_meta(project_path)
+        proj_name = meta.get("name", "Project") if meta else "Project"
+        
+        with open(readme_file, "w", encoding="utf-8") as f:
+            f.write(f"# {proj_name}\n\n**Status:** Active\n\n## Overview\n{description}\n\n## Tasks\n")
+            for t in tasks:
+                task_name = t.get("name", str(t)) if isinstance(t, dict) else str(t)
+                completed = t.get("completed", False) if isinstance(t, dict) else False
+                box = "x" if completed else " "
+                f.write(f"- [{box}] {task_name}\n")
 
-    return "\n".join(output)
+    def handle_instruction(self, instruction: str, explicit_project: str = "") -> str:
+        clean_instr = instruction.strip()
+        lower_instr = clean_instr.lower()
+
+        # 1. LIST PROJECTS
+        if "list" in lower_instr or "show projects" in lower_instr:
+            if not os.path.exists(self.base_dir):
+                return "No projects currently tracked."
+            entries = os.listdir(self.base_dir)
+            projs = []
+            for entry in entries:
+                p_path = os.path.join(self.base_dir, entry)
+                meta = self._load_meta(p_path)
+                if meta:
+                    tasks = meta.get('tasks', [])
+                    completed_count = sum(1 for t in tasks if isinstance(t, dict) and t.get('completed'))
+                    projs.append(f"• **{meta.get('name')}** (Status: {meta.get('status')}) - Tasks Completed: {completed_count}/{len(tasks)}")
+            return "Tracked Projects:\n" + ("\n".join(projs) if projs else "No projects found.")
+
+        # 2. INITIALIZE / CREATE PROJECT
+        if "initialize" in lower_instr or "create project" in lower_instr or "new project" in lower_instr:
+            proj_name = explicit_project
+            if not proj_name:
+                match = re.search(r'(?:project|named|called)\s+([A-Za-z0-9_-]+)', clean_instr, re.IGNORECASE)
+                if match:
+                    proj_name = match.group(1)
+                else:
+                    words = [w for w in clean_instr.split() if w.isalnum()]
+                    proj_name = words[2] if len(words) > 2 else "NewProject"
+
+            project_path = self._get_project_path(proj_name)
+            os.makedirs(project_path, exist_ok=True)
+
+            raw_tasks = []
+            if ":" in clean_instr:
+                task_part = clean_instr.split(":")[-1]
+                raw_tasks = [t.strip().strip('"').strip("'") for t in task_part.split(",") if t.strip()]
+
+            structured_tasks = [{"name": t, "completed": False} for t in raw_tasks]
+
+            meta = {
+                "name": proj_name,
+                "slug": _slugify(proj_name),
+                "status": "active",
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
+                "description": clean_instr,
+                "tasks": structured_tasks
+            }
+            self._save_meta(project_path, meta)
+            self._update_readme_tasks(project_path, structured_tasks, clean_instr)
+
+            return f"Successfully initialized project '{proj_name}' with {len(structured_tasks)} tasks."
+
+        # 3. MARK TASK COMPLETE (Explicit Memory alignment)
+        if "mark task complete" in lower_instr or "complete task" in lower_instr or "finish task" in lower_instr:
+            proj_name = explicit_project
+            if not proj_name:
+                for entry in os.listdir(self.base_dir) if os.path.exists(self.base_dir) else []:
+                    if entry.lower() in lower_instr:
+                        proj_name = entry
+                        break
+            if not proj_name:
+                projs = sorted([os.path.join(self.base_dir, d) for d in os.listdir(self.base_dir)], key=os.path.getmtime, reverse=True)
+                if projs:
+                    meta = self._load_meta(projs[0])
+                    if meta:
+                        proj_name = meta.get("name")
+
+            if not proj_name:
+                return "Error: Could not determine which project contains the task to complete."
+
+            project_path = self._get_project_path(proj_name)
+            meta = self._load_meta(project_path)
+            if not meta:
+                return f"Error: Project '{proj_name}' not found."
+
+            tasks = meta.get("tasks", [])
+            # Extract target task name after colon or keywords
+            target_task_query = ""
+            if ":" in clean_instr:
+                target_task_query = clean_instr.split(":")[-1].strip().lower()
+            
+            matched = False
+            for t in tasks:
+                t_name = t.get("name", str(t)).lower() if isinstance(t, dict) else str(t).lower()
+                if target_task_query in t_name or t_name in target_task_query:
+                    if isinstance(t, dict):
+                        t["completed"] = True
+                    else:
+                        # Migrate string task to dict object
+                        idx = tasks.index(t)
+                        tasks[idx] = {"name": str(t), "completed": True}
+                    matched = True
+                    break
+
+            if not matched and tasks and isinstance(tasks[0], dict) and not tasks[0]["completed"]:
+                # Default to completing the first pending task if query is ambiguous
+                tasks[0]["completed"] = True
+                matched = True
+
+            if matched:
+                meta["tasks"] = tasks
+                self._save_meta(project_path, meta)
+                self._update_readme_tasks(project_path, tasks, meta.get("description", ""))
+                return f"Successfully marked task complete in project '{proj_name}'."
+            return f"Error: Could not find matching task to complete in '{proj_name}'."
+
+        # 4. ADD TASKS TO EXISTING PROJECT
+        if "add task" in lower_instr or "add tasks" in lower_instr or "task:" in lower_instr:
+            proj_name = explicit_project
+            if not proj_name:
+                for entry in os.listdir(self.base_dir) if os.path.exists(self.base_dir) else []:
+                    if entry.lower() in lower_instr:
+                        proj_name = entry
+                        break
+            if not proj_name:
+                projs = sorted([os.path.join(self.base_dir, d) for d in os.listdir(self.base_dir)], key=os.path.getmtime, reverse=True)
+                if projs:
+                    meta = self._load_meta(projs[0])
+                    if meta:
+                        proj_name = meta.get("name")
+
+            if not proj_name:
+                return "Error: Could not determine which project to add tasks to."
+
+            project_path = self._get_project_path(proj_name)
+            meta = self._load_meta(project_path)
+            if not meta:
+                return f"Error: Project '{proj_name}' not found."
+
+            new_task_names = []
+            if ":" in clean_instr:
+                task_part = clean_instr.split(":")[-1]
+                new_task_names = [t.strip().strip('"').strip("'") for t in task_part.split(",") if t.strip()]
+
+            if not new_task_names:
+                new_task_names = [clean_instr]
+
+            current_tasks = meta.get("tasks", [])
+            # Ensure existing tasks are structured objects
+            structured_tasks = [
+                t if isinstance(t, dict) else {"name": str(t), "completed": False} 
+                for t in current_tasks
+            ]
+            for nt in new_task_names:
+                structured_tasks.append({"name": nt, "completed": False})
+
+            meta["tasks"] = structured_tasks
+            self._save_meta(project_path, meta)
+            self._update_readme_tasks(project_path, structured_tasks, meta.get("description", ""))
+
+            return f"Successfully added {len(new_task_names)} task(s) to '{proj_name}'. Total tasks: {len(structured_tasks)}."
+
+        return f"Project Manager processed instruction successfully: {instruction}"
 
 
-def get_project(project_name: str) -> str:
-    """Retrieves metadata, file list, and overview of a specific project."""
-    base_dir = _ensure_projects_dir()
-    slug = _slugify(project_name)
-    project_path = os.path.join(base_dir, slug)
+def execute(instruction: str = "", project_name: str = "", **kwargs) -> str:
+    """Standard tool entrypoint called by tool_runner.py with built-in safety net."""
+    if not instruction or not str(instruction).strip():
+        instruction = "list projects"
 
-    meta_file = os.path.join(project_path, "project.json")
-    readme_file = os.path.join(project_path, "README.md")
-
-    if not os.path.exists(meta_file):
-        return f"Error: Project '{project_name}' not found."
-
-    with open(meta_file, "r", encoding="utf-8") as f:
-        meta = json.load(f)
-
-    readme_content = ""
-    if os.path.exists(readme_file):
-        with open(readme_file, "r", encoding="utf-8") as f:
-            readme_content = f.read()
-
-    # Collect project documents inventory
-    doc_files = []
-    for root, _, files in os.walk(project_path):
-        for file in files:
-            rel_path = os.path.relpath(os.path.join(root, file), project_path)
-            if rel_path not in ["project.json"]:
-                doc_files.append(rel_path)
-
-    docs_summary = "\n".join([f"- `{f}`" for f in sorted(doc_files)]) if doc_files else "No documents created yet."
-
-    return (
-        f"=== PROJECT INFO ({meta.get('name')}) ===\n"
-        f"Path: {project_path}\n"
-        f"Status: {meta.get('status')}\n"
-        f"Created: {meta.get('created_at')}\n\n"
-        f"=== WORKSPACE DOCUMENTS ===\n"
-        f"{docs_summary}\n\n"
-        f"=== README.md ===\n"
-        f"{readme_content}"
-    )
+    manager = DeterministicProjectManager()
+    return manager.handle_instruction(instruction=instruction, explicit_project=project_name)
 
 
-def add_note(project_name: str, note_content: str) -> str:
-    """Appends notes or progress entries to a project's README.md."""
-    if not project_name or not note_content:
-        return "Error: Both project_name and note_content are required."
-
-    base_dir = _ensure_projects_dir()
-    slug = _slugify(project_name)
-    project_path = os.path.join(base_dir, slug)
-    readme_file = os.path.join(project_path, "README.md")
-
-    if not os.path.exists(readme_file):
-        return f"Error: Project '{project_name}' not found."
-
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    with open(readme_file, "a", encoding="utf-8") as f:
-        f.write(f"\n### Update ({timestamp})\n{note_content}\n")
-
-    return f"Successfully added note to project '{project_name}'."
-
-
-def update_project(project_name: str, status: Optional[str] = None, tasks: Optional[List[str]] = None) -> str:
-    """Updates status or tasks for an existing project."""
-    base_dir = _ensure_projects_dir()
-    slug = _slugify(project_name)
-    project_path = os.path.join(base_dir, slug)
-    meta_file = os.path.join(project_path, "project.json")
-
-    if not os.path.exists(meta_file):
-        return f"Error: Project '{project_name}' not found."
-
-    with open(meta_file, "r", encoding="utf-8") as f:
-        meta = json.load(f)
-
-    if status:
-        meta["status"] = status
-    if tasks:
-        meta["tasks"] = list(dict.fromkeys(meta.get("tasks", []) + tasks))
-    
-    meta["updated_at"] = datetime.now().isoformat()
-
-    with open(meta_file, "w", encoding="utf-8") as f:
-        json.dump(meta, f, indent=2)
-
-    return f"Successfully updated project '{project_name}'."
-
-
-def run(action: str, project_name: str = "", description: str = "", status: str = "planning", note_content: str = "", tasks: Optional[List[str]] = None, **kwargs) -> str:
-    """Execution dispatcher for ToolRegistry."""
-    action = action.lower()
-    if action == "create":
-        return create_project(project_name=project_name, description=description, status=status, tasks=tasks)
-    elif action == "list":
-        return list_projects()
-    elif action == "get":
-        return get_project(project_name=project_name)
-    elif action == "add_note":
-        return add_note(project_name=project_name, note_content=note_content)
-    elif action == "update":
-        return update_project(project_name=project_name, status=status, tasks=tasks)
-    else:
-        return f"Error: Unknown action '{action}' for project_manager_tool."
+# Alias run for tool registry compatibility
+run = execute

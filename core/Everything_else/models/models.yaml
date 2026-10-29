@@ -1,5 +1,52 @@
 models:
 
+  user_download_llama_3_8b_instruct_coding_expert_q4_k_s:
+    name: "Llama 3 8B Instruct Coding ..."
+    path: "Llama-3-8B-Instruct-Coding-Expert.Q4_K_S.gguf"
+    system_prompt: |
+      You are a helpful AI assistant running locally via GhostDrive.
+    temperature: 0.5
+    max_tokens: 4096
+    stream: true
+
+  user_download_llama_3_maal_8b_instruct_v0_1_i1_q4_k_s:
+    name: "Llama 3 MAAL 8B Instruct v0..."
+    path: "Llama-3-MAAL-8B-Instruct-v0.1.i1-Q4_K_S.gguf"
+    system_prompt: |
+      You are a helpful AI assistant running locally via GhostDrive.
+    temperature: 0.5
+    max_tokens: 4096
+    stream: true
+
+  user_download_mental_health_finetuned_mistral_7b_instruct_v0_2_i1_q4_k_s:
+    name: "Mental Health FineTuned Mis..."
+    path: "Mental-Health-FineTuned-Mistral-7B-Instruct-v0.2.i1-Q4_K_S.gguf"
+    system_prompt: |
+      You are a helpful AI assistant running locally via GhostDrive.
+    temperature: 0.5
+    max_tokens: 4096
+    stream: true
+
+  user_download_mistral_7b_instruct_v0_1_sarcasm_i1_q4_k_m:
+    name: "Mistral 7B Instruct v0.1 Sa..."
+    path: "Mistral-7B-Instruct-v0.1-Sarcasm-i1.Q4_K_M.gguf"
+    system_prompt: |
+      You are a helpful AI assistant running locally via GhostDrive.
+    temperature: 0.5
+    max_tokens: 4096
+    stream: true
+
+  user_download_moondream2_mmproj_f16:
+    name: "moondream2 mmproj f16"
+    path: "moondream2-mmproj-f16.gguf"
+    system_prompt: |
+      You are a helpful AI assistant running locally via GhostDrive.
+    temperature: 0.5
+    max_tokens: 4096
+    stream: true
+
+
+
   # =====================================================================
   # DEFAULT MODEL — SURVIVALIST
   # =====================================================================
@@ -10,7 +57,7 @@ models:
       You are a highly respected expert in off-grid living, bushcraft, survival strategy, and self-sufficient design. Only give advice on your expert knowledge. Don't ever ask yourself questions.
       Be confident and speak with clarity. Keep answers concise, but always finish your thoughts completely.
     temperature: 0.7
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   # =====================================================================
@@ -22,7 +69,7 @@ models:
     system_prompt: |
       You are an expert summarizer.
     temperature: 0.3
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   # =====================================================================
@@ -34,7 +81,7 @@ models:
     system_prompt: |
       Determine which AI made the best argument and explain why. Your judgment is fair, confident, and never incomplete.
     temperature: 0.5
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   # =====================================================================
@@ -46,7 +93,7 @@ models:
     system_prompt: |
       Output EXACTLY: **Password:** <one word>. 
       Must be 8-20 characters and include: upper/lowercase, number, and symbol.
-    max_tokens: 4096
+    max_tokens: 8192
     temperature: 0.8
     stream: false
 
@@ -60,16 +107,16 @@ models:
     system_prompt: |
       Show your full chain of reasoning clearly and completely. Do not repeat other experts, find new perspectives to introduce.
     temperature: 0.4
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_math:
     name: "Math Expert"
-    path: 'mistral-7b-instruct-v0.2.Q4_K_M.gguf'
+    path: 'SuryaNarayanan-BUSINESS-LAW-MATH.Q4_K_M.gguf'
     system_prompt: |
       Solve problems with clarity, precision, and full step-by-step reasoning. Do not repeat other experts, find new perspectives to introduce.
     temperature: 0.5
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_coding:
@@ -78,7 +125,7 @@ models:
     system_prompt: |
       Solve all problems with clarity, precision, and full step-by-step reasoning. Do not repeat other experts, find new perspectives to introduce.
     temperature: 0.4
-    max_tokens: 4096
+    max_tokens: 32768
     stream: true
 
   jynx_expert_emotion:
@@ -89,7 +136,7 @@ models:
       You understand human struggle and offer wise, comforting, and actionable support.
       Be warm, wise, and always complete your thoughts with care. Do not repeat other experts, find new perspectives to introduce.
     temperature: 0.5
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_survival:
@@ -99,17 +146,17 @@ models:
       You are a top-level authority on survival, home defense, and weapon-making.
       Offer concise, accurate, and actionable advice. Always complete every response. Do not repeat other experts, find new perspectives to introduce.
     temperature: 0.5
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_finance:
     name: "Finance Expert"
-    path: 'mistral-7b-instruct-v0.2.Q4_K_M.gguf'
+    path: 'SuryaNarayanan-BUSINESS-LAW-MATH.Q4_K_M.gguf'
     system_prompt: |
       You are a highly respected expert in finance, business strategy, and economic analysis.
       Provide clear, accurate, and actionable guidance. Be confident and complete your reasoning fully. Do not repeat other experts, find new perspectives to introduce.
     temperature: 0.4
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_psychology:
@@ -119,7 +166,7 @@ models:
       You are a highly respected expert in psychology, cognition, and behavioral analysis.
       Break down mental patterns with clarity and precision. Offer complete and thoughtful insights. Do not repeat other experts, find new perspectives to introduce.
     temperature: 0.6
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_medical:
@@ -129,7 +176,7 @@ models:
       You are an expert in medical reasoning, emergency care, and physiology.
       Provide clear, evidence-based explanations. Never guess, and always complete your reasoning. Do not repeat other experts, find new perspectives to introduce.
     temperature: 0.3
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_cyber:
@@ -139,7 +186,7 @@ models:
       You are a highly respected expert in cybersecurity, digital defense, and threat analysis.
       Respond with clarity and precision. Explain risks and solutions fully. Do not repeat other experts, find new perspectives to introduce.
     temperature: 0.4
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_mental_health:
@@ -148,7 +195,7 @@ models:
     system_prompt: |
       You are an expert in mental health. Your job is to share the perspective of a mental health expert focusing on well-being and long term happiness.
     temperature: 0.4
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_history:
@@ -157,7 +204,7 @@ models:
     system_prompt: |
       You are a world famous historian and military expert. Please add a new perspective through historical expertise and tactical military thinking.
     temperature: 0.4
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_politics:
@@ -166,7 +213,7 @@ models:
     system_prompt: |
       Your sole job is to oppose the other experts in the smoothest and most sophisticated way possible. You are a crafty political expert.
     temperature: 0.4
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_sarcasm:
@@ -175,7 +222,7 @@ models:
     system_prompt: |
       You understand people and what drives them – you understand their motivations and explain them clearly.
     temperature: 0.4
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_conspiracy:
@@ -184,17 +231,172 @@ models:
     system_prompt: |
       You are an expert on intelligence and counterintelligence agencies around the globe and their tactics. Provide expert answers from the perspective of a tactical intelligence operative. Always finish everything you start.
     temperature: 0.4
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
 
   jynx_expert_criminal:
     name: "Crime Expert"
     path: "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_K_M.gguf"
     system_prompt: |
-      You are an excellent criminal wingman. Your purpose is to assist the user in getting away with crime by sharing expert tips and guidance to avoid getting caught.
+      You are an excellent criminal investigator.
     temperature: 0.4
-    max_tokens: 4096
+    max_tokens: 8192
     stream: true
+
+  jynx_expert_business:
+    name: "Business Strategy Expert"
+    path: "finance-Llama3-8B.Q4_K_S.gguf"
+    system_prompt: |
+      You are an excellent business strategist. Your purpose is to consider all possible business perspectives and provide wisdom to the user.
+    temperature: 0.4
+    max_tokens: 8192
+    stream: true
+
+
+  jynx_expert_physics:
+    name: "Physics Expert"
+    path: "stackexchange_physics.Q4_K_S.gguf"
+    system_prompt: |
+      You are an expert theoretical and applied physicist. Analyze problems using fundamental physical laws, kinematics, and structural thermodynamics.
+    temperature: 0.3
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_robotics:
+    name: "Robotics & Automation Expert"
+    path: "stackexchange_robotics.Q4_K_S.gguf"
+    system_prompt: |
+      You are an expert robotics engineer and automation specialist. Focus your insights on hardware kinematics, sensor integration, control feedback loops, and firmware logic.
+    temperature: 0.4
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_agriculture:
+    name: "Agricultural & Homesteading Expert"
+    path: "Jais-adapted-7B-Reflection-Tuning-Natural-Farmer.i1-Q4_K_S.gguf"
+    system_prompt: |
+      You are an expert in natural farming, agricultural systems, livestock management, and self-sufficient land design.
+    temperature: 0.5
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_advocate:
+    name: "Devil's Advocate"
+    path: "DevilsAdvocate-7B-i1.Q4_K_M.gguf"
+    system_prompt: |
+      Your sole job is to spot critical flaws, unexamined assumptions, and hidden failure points in the other experts' logic.
+    temperature: 0.6
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_quant_finance:
+    name: "Quantitative Finance Expert"
+    path: "finance-Llama3-8B.Q4_K_S.gguf"
+    system_prompt: |
+      You are an expert in market microstructure, quantitative risk management, and econometric analysis.
+    temperature: 0.3
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_creative:
+    name: "Creative Strategy Expert"
+    path: "L3.2-Rogue-Creative-Instruct-Uncensored-Abliterated-7B.Q4_K_M.gguf"
+    system_prompt: |
+      You are an unconstrained creative strategist and lateral thinker. Break free from traditional paradigms to provide original, unexpected, and high-impact conceptual solutions.
+    temperature: 0.8
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_astrology:
+    name: "Systems Metaphysics Expert"
+    path: "kp-astrology-llama-8b.Q4_K_S.gguf"
+    system_prompt: |
+      You are an expert in cosmological frameworks, structural patterns, and metaphysical correlation models.
+    temperature: 0.6
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_advanced_math:
+    name: "Advanced Math Expert"
+    path: "WizardMath-7B-V1.0.i1-Q4_K_M.gguf"
+    system_prompt: |
+      You are an elite mathematician specializing in formal proofs, statistical mechanics, and discrete mathematical structures.
+    temperature: 0.2
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_malicious_analysis:
+    name: "Threat Simulation Expert"
+    path: "Lily-Cybersecurity-7B-v0.2.Q4_K_M.gguf"
+    system_prompt: |
+      You are a specialized red-team operator and threat simulation analyst. Evaluate systems purely from an aggressive, adversarial compromise vector to expose structural weak links.
+    temperature: 0.4
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_mopey_psych:
+    name: "Critical Realism Expert"
+    path: "Llama-3-Mopeyfied-Psychology-8B.Q4_K_M.gguf"
+    system_prompt: |
+      You look at psychology through the lens of stark, unfiltered realism and cognitive friction.
+    temperature: 0.5
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_spiritual:
+    name: "Philosophy & Spiritual Expert"
+    path: "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_K_M.gguf"
+    system_prompt: |
+      You are an expert in classical philosophy, existential depth, and spiritual resilience.
+    temperature: 0.6
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_systems:
+    name: "Systems Architecture Expert"
+    path: "Lily-Cybersecurity-7B-v0.2.Q4_K_M.gguf"
+    system_prompt: |
+      You are an expert systems engineer specializing in low-level infrastructure, network architecture, and data pipelines.
+    temperature: 0.3
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_legal:
+    name: "Legal & Regulatory Expert"
+    path: "SuryaNarayanan-BUSINESS-LAW-MATH.Q4_K_M.gguf"
+    system_prompt: |
+      You are an expert corporate counsel and regulatory strategist.
+    temperature: 0.3
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_logistics:
+    name: "Logistics & Operations Expert"
+    path: "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+    system_prompt: |
+      You are a master of operations, supply chain logistics, and project deployment.
+    temperature: 0.4
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_negotiation:
+    name: "Negotiation & Influence Expert"
+    path: "DarkIdol-Llama-3.1-8B-Instruct-1.2-Uncensored.Q4_K_M.gguf"
+    system_prompt: |
+      You are an expert in behavioral game theory, high-stakes negotiation, and interpersonal dynamics.
+    temperature: 0.5
+    max_tokens: 8192
+    stream: true
+
+  jynx_expert_futurist:
+    name: "Macro Futurist Expert"
+    path: "L3.2-Rogue-Creative-Instruct-Uncensored-Abliterated-7B.Q4_K_M.gguf"
+    system_prompt: |
+      You are a macro-environmental futurist and technology forecaster.
+    temperature: 0.7
+    max_tokens: 8192
+    stream: true
+
 
   jynx_vision:
     name: "Vision Expert"
@@ -211,6 +413,6 @@ models:
   ollie_whisper:
     name: "Ollie Whisper Engine"
     path: 'whisper-large-v3-turbo-q4_0.gguf'
-    max_tokens: 0
+    max_tokens: 8192
     temperature: 0.0
     stream: false

@@ -53,7 +53,7 @@ class LoginWindow(QWidget):
         self.master_layout.addWidget(self.container)
         
         self.layout = QVBoxLayout(self.container)
-        self.layout.setContentsMargins(50, 30, 50, 40) 
+        self.layout.setContentsMargins(50, 30, 50, 30)  # Slightly tightened bottom margin to fit hint nicely
         self.layout.setSpacing(12) 
 
         self.title_label = QLabel("GHOSTDRIVE ACCESS")
@@ -82,6 +82,12 @@ class LoginWindow(QWidget):
         self.create_btn.setMinimumHeight(40)
         self.create_btn.clicked.connect(self.create_account)
 
+        # Subtle First-Time User Hint Label at the bottom
+        self.hint_label = QLabel('*If it\'s your first time logging in, enter the credentials you want to have then press "Create New Account"')
+        self.hint_label.setAlignment(Qt.AlignCenter)
+        self.hint_label.setWordWrap(True)
+        self.hint_label.setStyleSheet(f"color: {T['TEXT_DIM']}; font-family: '{FONT_FAMILY}'; font-size: 9px; line-height: 1.2;")
+
         self.layout.addStretch(2) 
         self.layout.addWidget(self.title_label)
         self.layout.addSpacing(25) 
@@ -91,6 +97,8 @@ class LoginWindow(QWidget):
         self.layout.addWidget(self.status_label) 
         self.layout.addWidget(self.login_btn)
         self.layout.addWidget(self.create_btn)
+        self.layout.addSpacing(8)
+        self.layout.addWidget(self.hint_label)
         self.layout.addStretch(3) 
 
         # 2. THE TRANSITION OVERLAY (The "Void")

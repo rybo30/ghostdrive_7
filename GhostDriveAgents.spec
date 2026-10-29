@@ -9,6 +9,7 @@ is_mac = platform.system() == 'Darwin'
 llama_datas, llama_binaries, llama_hiddenimports = collect_all('llama_cpp')
 pyqtgraph_datas, pyqtgraph_binaries, pyqtgraph_hiddenimports = collect_all('pyqtgraph')
 bs4_datas, bs4_binaries, bs4_hiddenimports = collect_all('bs4')
+docx_datas, docx_binaries, docx_hiddenimports = collect_all('docx')
 
 # Icon detection
 ghost_ico = os.path.join('core', 'Everything_else', 'ghost.ico')
@@ -24,8 +25,8 @@ if os.path.exists(ghost_icns):
 a = Analysis(
     ['core/Everything_else/agents/daemon.py'],
     pathex=['.', 'core', 'core/Everything_else', 'core/Everything_else/agents'],
-    binaries=llama_binaries + pyqtgraph_binaries + bs4_binaries,
-    datas=llama_datas + pyqtgraph_datas + bs4_datas + icon_datas,
+    binaries=llama_binaries + pyqtgraph_binaries + bs4_binaries + docx_binaries,
+    datas=llama_datas + pyqtgraph_datas + bs4_datas + icon_datas + docx_datas,
     hiddenimports=[
         # System & Security
         'cryptography',
@@ -37,11 +38,12 @@ a = Analysis(
         'yaml',
         'sqlite3',
         
-        # XML & Web Parsers
+        # XML, Web & Document Parsers
         'xml',
         'xml.etree',
         'xml.etree.ElementTree',
         'html.parser',
+        'docx',
         
         # Inference & Math
         'llama_cpp',
@@ -54,7 +56,7 @@ a = Analysis(
         'PySide6.QtWidgets',
         'pyqtgraph',
         
-        # Internal Agent Modules
+        # Internal Agent Modules & Dynamic Tools
         'core',
         'core.paths',
         'Everything_else',
@@ -64,7 +66,11 @@ a = Analysis(
         'ram_manager',
         'telegram_bot',
         'tool_runner',
-    ] + llama_hiddenimports + pyqtgraph_hiddenimports + bs4_hiddenimports,
+        'document_reader_tool',
+        'document_manager_tool',
+        'project_manager_tool',
+        'market_data_tool',
+    ] + llama_hiddenimports + pyqtgraph_hiddenimports + bs4_hiddenimports + docx_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

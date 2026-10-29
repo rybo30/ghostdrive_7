@@ -378,26 +378,14 @@ class TelegramBotGateway:
                     self.send_message(chat_id, f"📥 *Downloading document:* `{file_name}`...")
                     local_file_path = self._download_telegram_file(file_id, file_name)
 
-                    if local_file_path:
-                        extracted_content = ""
-                        try:
-                            import document_reader_tool
-                            extracted_content = document_reader_tool.run(file_path=local_file_path)
-                        except Exception as e:
-                            extracted_content = f"Could not parse document: {e}"
-
-                        try:
-                            if os.path.exists(local_file_path):
-                                os.remove(local_file_path)
-                        except Exception:
-                            pass
-
+                    if local_file_path and os.path.exists(local_file_path):
+                        # Give the agent the clean absolute file path to read using its tool
                         file_context = (
-                            f"=== ATTACHED DOCUMENT CONTEXT ({file_name}) ===\n"
-                            f"{extracted_content}\n"
-                            f"=== END DOCUMENT CONTEXT ===\n\n"
+                            f"=== ATTACHED DOCUMENT PATH ({file_name}) ===\n"
+                            f"File is saved locally at: {os.path.abspath(local_file_path)}\n"
+                            f"=== END DOCUMENT PATH ===\n\n"
                         )
-                        text = f"{file_context}User Query: {text if text else 'Summarize or extract key points.'}"
+                        text = f"{file_context}User Query: {text if text else 'Please use the document_reader_tool on the provided path to read and summarize this file.'}"
 
             if not text:
                 return
@@ -445,7 +433,7 @@ class TelegramBotGateway:
             self.db.update_status(task_id, "PROCESSING")
 
             if hasattr(self.ram_manager, 'model_instance') and self.ram_manager.model_instance is None:
-                self.send_message(chat_id, "⏳ Agent model initializing into host RAM...")
+                self.send_message(chat_id, "⏳ Loading Agent")
 
             try:
                 # Retrieve up to 2 prior user messages for context
