@@ -3,6 +3,8 @@ import os
 import platform
 
 is_mac = platform.system() == 'Darwin'
+is_windows = platform.system() == 'Windows'
+should_strip = not is_windows
 
 ghost_ico = os.path.join('core', 'Everything_else', 'ghost.ico')
 ghost_icns = os.path.join('core', 'Everything_else', 'ghost.icns')
@@ -79,7 +81,7 @@ exe = EXE(
     name='GhostDriveAgents',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=True,
+    strip=should_strip,
     upx=False,
     console=False,
     icon=ghost_ico if (not is_mac and os.path.exists(ghost_ico)) else None,
@@ -90,7 +92,7 @@ coll = COLLECT(
     a.binaries,
     a.zipfiles,
     a.datas,
-    strip=True,
+    strip=should_strip,
     upx=False,
     name='GhostDriveAgents',
 )
