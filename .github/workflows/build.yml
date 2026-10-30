@@ -10,95 +10,101 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build Main GhostDrive
-        run: pyinstaller --noconfirm --clean GhostDrive.spec
+      - name: Build
+        run: |
+          pyinstaller --noconfirm --clean GhostDrive.spec
+          pyinstaller --noconfirm --clean GhostDriveAgents.spec
 
-      - name: Build GhostDrive Agents
-        run: pyinstaller --noconfirm --clean GhostDriveAgents.spec
+      - name: Compress
+        run: |
+          Compress-Archive -Path dist/GhostDrive -DestinationPath GhostDrive-Windows.zip
+          Compress-Archive -Path dist/GhostDriveAgents -DestinationPath GhostDriveAgents-Windows.zip
 
-      - name: Upload Windows Artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: Windows-Builds
-          path: |
-            dist/GhostDrive.exe
-            dist/GhostDriveAgents.exe
+          name: GhostDrive-Windows
+          path: GhostDrive-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GhostDriveAgents-Windows
+          path: GhostDriveAgents-Windows.zip
 
   build-mac:
     runs-on: macos-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build Mac App (GhostDrive)
-        run: pyinstaller --noconfirm --clean GhostDrive.spec
+      - name: Build
+        run: |
+          pyinstaller --noconfirm --clean GhostDrive.spec
+          pyinstaller --noconfirm --clean GhostDriveAgents.spec
 
-      - name: Build Mac App (Agents)
-        run: pyinstaller --noconfirm --clean GhostDriveAgents.spec
+      - name: Compress
+        run: |
+          zip -r GhostDrive-macOS.zip dist/GhostDrive.app
+          zip -r GhostDriveAgents-macOS.zip dist/GhostDriveAgents.app
 
-      - name: Upload Mac Artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: Mac-Builds
-          path: |
-            dist/GhostDrive.app
-            dist/GhostDriveAgents.app
+          name: GhostDrive-macOS
+          path: GhostDrive-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GhostDriveAgents-macOS
+          path: GhostDriveAgents-macOS.zip
 
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build Linux Binary (GhostDrive)
-        run: pyinstaller --noconfirm --clean GhostDrive.spec
+      - name: Build
+        run: |
+          pyinstaller --noconfirm --clean GhostDrive.spec
+          pyinstaller --noconfirm --clean GhostDriveAgents.spec
 
-      - name: Build Linux Binary (Agents)
-        run: pyinstaller --noconfirm --clean GhostDriveAgents.spec
+      - name: Compress
+        run: |
+          tar -czvf GhostDrive-Linux.tar.gz -C dist GhostDrive
+          tar -czvf GhostDriveAgents-Linux.tar.gz -C dist GhostDriveAgents
 
-      - name: Upload Linux Artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: Linux-Builds
-          path: |
-            dist/GhostDrive
-            dist/GhostDriveAgents
+          name: GhostDrive-Linux
+          path: GhostDrive-Linux.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GhostDriveAgents-Linux
+          path: GhostDriveAgents-Linux.tar.gz
