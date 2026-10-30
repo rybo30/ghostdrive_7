@@ -55,9 +55,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          # Pulls the pre-built Apple Silicon / Metal optimized wheel directly from the index
+          python -m pip cache purge
+          
+          # Install llama-cpp-python FIRST while network pipe is clean to prevent CRC checksum errors
           pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/metal
+          
+          # Then install torch, requirements, and pyinstaller
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
           pip install pyinstaller
 
