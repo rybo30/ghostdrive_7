@@ -56,12 +56,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip cache purge
-          
-          # Install llama-cpp-python FIRST while network pipe is clean to prevent CRC checksum errors
-          pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/metal
-          
-          # Then install torch, requirements, and pyinstaller
           pip install torch --index-url https://download.pytorch.org/whl/cpu
+          
+          # Compile llama-cpp-python from source on Mac to entirely bypass wheel zip/CRC corruption errors
+          pip install --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python
+          
           pip install -r requirements.txt
           pip install pyinstaller
 
