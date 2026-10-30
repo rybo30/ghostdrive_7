@@ -3,7 +3,8 @@ name: Build GhostDrive & Agents
 on:
   push:
     tags:
-      - 'v*' # Triggers automatically when you push a version tag like v1.0.0
+      - 'v*'
+  workflow_dispatch: # Adds a manual "Run workflow" button on GitHub
 
 jobs:
   build-windows:
