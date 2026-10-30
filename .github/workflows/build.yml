@@ -53,21 +53,13 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies via direct wheel download
+      - name: Install dependencies in virtual environment
         run: |
           python -m venv venv
           source venv/bin/activate
           python -m pip install --upgrade pip
-          
-          # 1. Download Torch wheel directly via curl and install locally
-          curl -L -o torch-2.15.0-cp312-cp312-macosx_14_0_arm64.whl https://download.pytorch.org/whl/cpu/torch-2.15.0-cp312-cp312-macosx_14_0_arm64.whl
-          pip install --no-cache-dir torch-2.15.0-cp312-cp312-macosx_14_0_arm64.whl
-          
-          # 2. Download Llama-cpp-python wheel directly via curl and install locally
-          curl -L -o llama_cpp_python-0.3.36-py3-none-macosx_11_0_arm64.whl https://abetlen.github.io/llama-cpp-python/whl/cpu/llama_cpp_python-0.3.36-py3-none-macosx_11_0_arm64.whl
-          pip install --no-cache-dir llama_cpp_python-0.3.36-py3-none-macosx_11_0_arm64.whl
-          
-          # 3. Install remaining requirements and PyInstaller
+          pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+          pip install --no-cache-dir llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
           pip install --no-cache-dir -r requirements.txt
           pip install --no-cache-dir pyinstaller
 
