@@ -1,28 +1,15 @@
-# Core AI & Inference
+﻿PySide6
+beautifulsoup4
+cryptography
+python-docx
 llama-cpp-python
 numpy
-sounddevice
-scipy
-openai-whisper
-tiktoken
-torch
-
-# GUI & Data Visualization
-PySide6
-pyqtgraph
-
-# Security & System Utilities
-cryptography
-psutil
-diskcache
-
-# Networking & Document Parsing
-requests
 pypdf
-python-docx
-jinja2
+pyqtgraph
+requests
+scipy
+sounddevice
+torch
+openai-whisper
 PyYAML
-beautifulsoup4
-
-# Build & Deployment Tools
-pyinstaller
+psutil

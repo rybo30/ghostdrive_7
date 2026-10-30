@@ -2,8 +2,39 @@
 
 import sys
 import os
+
+# ===============================================================
+# [0] THREAD LIMITS & EXCEPTION HOOKS (PERFORMANCE)
+# ===============================================================
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "2"
+os.environ["NUMEXPR_NUM_THREADS"] = "2"
+os.environ["TORCH_NUM_THREADS"] = "2"
+
+import traceback
+from PySide6.QtCore import qInstallMessageHandler
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    print("\n==================================================", file=sys.stderr)
+    print("CRITICAL RUNTIME EXCEPTION DETECTED:", file=sys.stderr)
+    print("==================================================", file=sys.stderr)
+    traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stderr)
+    print("==================================================\n", file=sys.stderr)
+
+sys.excepthook = handle_exception
+
+def qt_message_handler(mode, context, message):
+    print(f"[Qt Msg]: {message}", file=sys.stderr)
+
+qInstallMessageHandler(qt_message_handler)
+
 import argparse
-import ctypes # Added for Windows API access
+import ctypes
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon
 
@@ -34,7 +65,6 @@ except ImportError:
     EVERYTHING_ELSE = core_paths.EVERYTHING_ELSE
     USER_DATA = core_paths.USER_DATA
 
-# Updated icon paths
 PNG_ICON = os.path.join(EVERYTHING_ELSE, "ghost.png")
 ICO_ICON = os.path.join(EVERYTHING_ELSE, "ghost.ico")
 ICON_PATH = PNG_ICON if os.path.exists(PNG_ICON) else ICO_ICON
@@ -57,21 +87,18 @@ def launch_main(username, passphrase, fernet):
     main_window.show()
 
 def main():
-    # Parse CLI flags to check for daemon execution mode
     parser = argparse.ArgumentParser(description="GhostDrive Launcher", add_help=False)
     parser.add_argument("--daemon", "--agent-daemon", action="store_true", help="Launch background AI Agent Daemon")
     parser.add_argument("--config", type=str, help="Path to specific agent JSON configuration file")
     args, _ = parser.parse_known_args()
 
-    # --- AUTO-MINIMIZE TERMINAL ---
-    # Only runs on Windows when compiled as an EXE to keep the background clean
     if getattr(sys, 'frozen', False) and sys.platform == "win32":
         try:
             kernel32 = ctypes.WinDLL('kernel32')
             user32 = ctypes.WinDLL('user32')
             hWnd = kernel32.GetConsoleWindow()
             if hWnd != 0:
-                user32.ShowWindow(hWnd, 6) # 6 = SW_MINIMIZE
+                user32.ShowWindow(hWnd, 6)
         except Exception:
             pass
 
@@ -81,14 +108,10 @@ def main():
     if os.path.exists(ICON_PATH):
         app.setWindowIcon(QIcon(ICON_PATH))
 
-    # ===============================================================
-    # [4] DAEMON LAUNCH BRANCH (Single Binary Dual-Personality)
-    # ===============================================================
     if args.daemon:
         from core.Everything_else.agents.daemon import AgentDaemonWindow
         from core.paths import AGENT_CONFIGS_DIR
         
-        # Fallback priority: explicit CLI arg -> active_agent.enc -> active_agent.json
         if args.config:
             config_path = args.config
         else:
@@ -102,9 +125,6 @@ def main():
         daemon_win.show()
         sys.exit(app.exec())
 
-    # ===============================================================
-    # [5] STANDARD DESKTOP GUI LAUNCH BRANCH
-    # ===============================================================
     if not getattr(sys, 'frozen', False):
         print_system_info()
     

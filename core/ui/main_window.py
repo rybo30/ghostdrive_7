@@ -206,25 +206,32 @@ class GhostDriveMainWindow(QMainWindow):
         self.close_btn.clicked.connect(self.close)
         h_lay.addWidget(self.close_btn)
 
-        # --- PAGES ---
+        # --- LAZY LOADED PAGES SETUP ---
         self.stack = QStackedWidget()
-        self.pages = {
-            "My Drive": MyDrivePage(self.engine, self.manifest),
-            "Chat": ChatPage(username, passphrase, fernet, engine=self.engine, manifest=self.manifest),
-            "Coding": CodingPage(username, passphrase, fernet, engine=self.engine, manifest=self.manifest),
-            "Agent": AgentsPage(username, passphrase, fernet, engine=self.engine, manifest=self.manifest),
-            "Meeting": OlliePage(username, passphrase, fernet, engine=self.engine, manifest=self.manifest), 
-            "Profile": ProfilePage(username, fernet),
-            "Password Vault": VaultPage(username, passphrase, fernet),
-            "Projects": ProjectsPage(username, passphrase, fernet),
-            "Inventory": InventoryPage(username, passphrase, fernet),
-            "Health": HealthPage(username, fernet),
-            "Games": GamesPage(username, fernet),
-            "Sync": SyncPage(username, fernet, self.ghost_id, getattr(app, "private_key", None))
+        
+        # Map logical names to factory functions so they only instantiate when clicked
+        self.page_classes = {
+            "My Drive": lambda: MyDrivePage(self.engine, self.manifest),
+            "Chat": lambda: ChatPage(username, passphrase, fernet, engine=self.engine, manifest=self.manifest),
+            "Coding": lambda: CodingPage(username, passphrase, fernet, engine=self.engine, manifest=self.manifest),
+            "Agent": lambda: AgentsPage(username, passphrase, fernet, engine=self.engine, manifest=self.manifest),
+            "Meeting": lambda: OlliePage(username, passphrase, fernet, engine=self.engine, manifest=self.manifest), 
+            "Profile": lambda: ProfilePage(username, fernet),
+            "Password Vault": lambda: VaultPage(username, passphrase, fernet),
+            "Projects": lambda: ProjectsPage(username, passphrase, fernet),
+            "Inventory": lambda: InventoryPage(username, passphrase, fernet),
+            "Health": lambda: HealthPage(username, fernet),
+            "Games": lambda: GamesPage(username, fernet),
+            "Sync": lambda: SyncPage(username, fernet, self.ghost_id, getattr(app, "private_key", None))
         }
 
-        for page in self.pages.values(): 
-            self.stack.addWidget(page)
+        self.pages = {} # Populated dynamically on demand
+
+        # Pre-load only the default landing page ("My Drive") for instant startup
+        default_key = "My Drive"
+        first_page = self.page_classes[default_key]()
+        self.pages[default_key] = first_page
+        self.stack.addWidget(first_page)
 
         self.content_layout.addWidget(self.header)
         self.content_layout.addWidget(self.stack)
@@ -282,7 +289,14 @@ class GhostDriveMainWindow(QMainWindow):
         sender.setChecked(True)
         display_text = sender.text().strip()
         logical_key = self.nav_map.get(display_text)
-        if logical_key in self.pages:
+        
+        if logical_key in self.page_classes:
+            # Instantiate page only if it hasn't been loaded yet
+            if logical_key not in self.pages:
+                page_instance = self.page_classes[logical_key]()
+                self.pages[logical_key] = page_instance
+                self.stack.addWidget(page_instance)
+                
             self.stack.setCurrentWidget(self.pages[logical_key])
             self.header_title.setText(display_text)
 
