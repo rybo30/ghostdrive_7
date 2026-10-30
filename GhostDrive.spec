@@ -11,11 +11,21 @@ llama_datas, llama_binaries, llama_hiddenimports = collect_all('llama_cpp')
 sd_datas, sd_binaries, sd_hiddenimports = collect_all('sounddevice')
 whisper_datas, whisper_binaries, whisper_hiddenimports = collect_all('whisper')
 
+# Icon detection & packaging into datas so they reside cleanly inside _internal
+ghost_ico = os.path.join('core', 'Everything_else', 'ghost.ico')
+ghost_icns = os.path.join('core', 'Everything_else', 'ghost.icns')
+
+icon_datas = []
+if os.path.exists(ghost_ico):
+    icon_datas.append((ghost_ico, os.path.join('core', 'Everything_else')))
+if os.path.exists(ghost_icns):
+    icon_datas.append((ghost_icns, os.path.join('core', 'Everything_else')))
+
 a = Analysis(
     ['main.py'],
     pathex=['.', 'core', 'core/Everything_else'], 
     binaries=llama_binaries + sd_binaries + whisper_binaries,
-    datas=llama_datas + sd_datas + whisper_datas, 
+    datas=llama_datas + sd_datas + whisper_datas + icon_datas, 
     hiddenimports=[
         # --- Core Root Modules ---
         'core.identity',
@@ -128,30 +138,39 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
+    [],
+    exclude_binaries=True, # Enforces onedir folder structure
     name='GhostDrive',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False, 
     upx_exclude=[],
-    runtime_tmpdir=None,
-    console=True, 
+    console=True,          # Visible terminal window
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='core/Everything_else/ghost.ico' if not is_mac else None,
+    icon=ghost_ico if (not is_mac and os.path.exists(ghost_ico)) else None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='GhostDrive',
 )
 
 if is_mac:
     app = BUNDLE(
-        exe,
+        coll,
         name='GhostDrive.app',
-        icon='core/Everything_else/ghost.icns',
+        icon=ghost_icns if os.path.exists(ghost_icns) else None,
         bundle_identifier='com.ghostdrive.app',
         info_plist={
             'NSHighResolutionCapable': 'True',

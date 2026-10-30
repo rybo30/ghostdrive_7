@@ -11,11 +11,10 @@ pyqtgraph_datas, pyqtgraph_binaries, pyqtgraph_hiddenimports = collect_all('pyqt
 bs4_datas, bs4_binaries, bs4_hiddenimports = collect_all('bs4')
 docx_datas, docx_binaries, docx_hiddenimports = collect_all('docx')
 
-# Icon detection
+# Icon detection & packaging into datas
 ghost_ico = os.path.join('core', 'Everything_else', 'ghost.ico')
 ghost_icns = os.path.join('core', 'Everything_else', 'ghost.icns')
 
-# Map local icon files to destination inside _internal folder
 icon_datas = []
 if os.path.exists(ghost_ico):
     icon_datas.append((ghost_ico, os.path.join('core', 'Everything_else')))
@@ -26,7 +25,7 @@ a = Analysis(
     ['core/Everything_else/agents/daemon.py'],
     pathex=['.', 'core', 'core/Everything_else', 'core/Everything_else/agents'],
     binaries=llama_binaries + pyqtgraph_binaries + bs4_binaries + docx_binaries,
-    datas=llama_datas + pyqtgraph_datas + bs4_datas + icon_datas + docx_datas,
+    datas=llama_datas + pyqtgraph_datas + bs4_datas + icon_datas + docx_datas + docx_datas,
     hiddenimports=[
         # System & Security
         'cryptography',
@@ -90,7 +89,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=False,
+    console=False,         # Completely hidden background process (no terminal)
     icon=ghost_ico if (not is_mac and os.path.exists(ghost_ico)) else None,
 )
 
