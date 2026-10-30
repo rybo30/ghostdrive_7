@@ -22,24 +22,25 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build
+      - name: Build Windows (Single-File Mode to fix DLL memory load)
         run: |
-          pyinstaller --noconfirm --clean GhostDrive.spec
-          pyinstaller --noconfirm --clean GhostDriveAgents.spec
+          pyinstaller --noconfirm --clean --onefile GhostDrive.spec
+          pyinstaller --noconfirm --clean --onefile GhostDriveAgents.spec
 
-      - name: Compress
+      - name: Prepare Artifacts
         run: |
-          Compress-Archive -Path dist/GhostDrive -DestinationPath GhostDrive-Windows.zip
-          Compress-Archive -Path dist/GhostDriveAgents -DestinationPath GhostDriveAgents-Windows.zip
+          mkdir windows_artifacts
+          move dist/GhostDrive.exe windows_artifacts/
+          move dist/GhostDriveAgents.exe windows_artifacts/
 
       - uses: actions/upload-artifact@v4
         with:
           name: GhostDrive-Windows
-          path: GhostDrive-Windows.zip
+          path: windows_artifacts/GhostDrive.exe
       - uses: actions/upload-artifact@v4
         with:
           name: GhostDriveAgents-Windows
-          path: GhostDriveAgents-Windows.zip
+          path: windows_artifacts/GhostDriveAgents.exe
 
   build-mac:
     runs-on: macos-latest
