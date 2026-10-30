@@ -61,6 +61,9 @@ a = Analysis(
         'yaml',
         'sqlite3',
         'json',
+        'PySide6.QtCore',
+        'PySide6.QtGui',
+        'PySide6.QtWidgets',
     ],
     hookspath=[],
     hooksconfig={},
@@ -69,7 +72,6 @@ a = Analysis(
         'matplotlib', 
         'tkinter.test', 
         'unit_test', 
-        'PySide6', 
         'pyqtgraph', 
         'torch.tests', 
         'numpy.tests'
