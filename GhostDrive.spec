@@ -2,6 +2,7 @@
 import os
 import platform
 import llama_cpp
+import whisper
 
 is_mac = platform.system() == 'Darwin'
 is_windows = platform.system() == 'Windows'
@@ -21,6 +22,10 @@ if os.path.exists(ghost_icns):
 # Automatically bundle the full llama_cpp package directory including its native lib binaries
 llama_cpp_dir = os.path.dirname(llama_cpp.__file__)
 icon_datas.append((llama_cpp_dir, 'llama_cpp'))
+
+# Automatically bundle Whisper package assets (tokenizers, normalizers, filters)
+whisper_dir = os.path.dirname(whisper.__file__)
+icon_datas.append((whisper_dir, 'whisper'))
 
 a = Analysis(
     ['main.py'],
