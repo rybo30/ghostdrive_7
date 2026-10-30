@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import platform
+import llama_cpp
 
 is_mac = platform.system() == 'Darwin'
 is_windows = platform.system() == 'Windows'
@@ -16,6 +17,10 @@ if os.path.exists(ghost_ico):
     icon_datas.append((ghost_ico, os.path.join('core', 'Everything_else')))
 if os.path.exists(ghost_icns):
     icon_datas.append((ghost_icns, os.path.join('core', 'Everything_else')))
+
+# Automatically bundle the full llama_cpp package directory including its native lib binaries
+llama_cpp_dir = os.path.dirname(llama_cpp.__file__)
+icon_datas.append((llama_cpp_dir, 'llama_cpp'))
 
 a = Analysis(
     ['main.py'],
