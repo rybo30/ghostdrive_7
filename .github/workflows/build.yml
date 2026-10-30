@@ -71,8 +71,15 @@ jobs:
 
       - name: Compress
         run: |
-          zip -r GhostDrive-macOS.zip dist/GhostDrive.app
-          zip -r GhostDriveAgents-macOS.zip dist/GhostDriveAgents.app
+          # Purge unused byte-code and cache junk from the built app bundles to reduce artifact size
+          find dist/GhostDrive.app -name "*.pyc" -delete
+          find dist/GhostDrive.app -name "__pycache__" -type d -exec rm -rf {} +
+          find dist/GhostDriveAgents.app -name "*.pyc" -delete
+          find dist/GhostDriveAgents.app -name "__pycache__" -type d -exec rm -rf {} +
+          
+          # Use maximum compression level (-9) for the macOS zip archives
+          zip -9 -r GhostDrive-macOS.zip dist/GhostDrive.app
+          zip -9 -r GhostDriveAgents-macOS.zip dist/GhostDriveAgents.app
 
       - uses: actions/upload-artifact@v4
         with:
