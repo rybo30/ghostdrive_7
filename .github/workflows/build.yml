@@ -58,8 +58,8 @@ jobs:
           python -m pip cache purge
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           
-          # Use --prefer-binary to avoid full source-tree bloat while avoiding CRC lockups
-          pip install llama-cpp-python --prefer-binary --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/metal
+          # Force source compilation to completely bypass fragile pre-built wheel CRC corruption errors
+          pip install --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python
           
           pip install -r requirements.txt
           pip install pyinstaller
