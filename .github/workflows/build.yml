@@ -58,11 +58,35 @@ jobs:
           python -m pip cache purge
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           
-          # Compile llama-cpp-python from source on Mac to entirely bypass wheel zip/CRC corruption errors
+          # Compile llama-cpp-python from source on Mac to bypass wheel zip/CRC corruption errors
           pip install --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python
           
           pip install -r requirements.txt
           pip install pyinstaller
+
+      - name: Slim down site-packages (Purge source build junk)
+        run: |
+          python -c "
+          import site, os
+          for site_dir in site.getsitepackages():
+              llama_dir = os.path.join(site_dir, 'llama_cpp')
+              if os.path.exists(llama_dir):
+                  print(f'Cleaning build artifacts in {llama_dir}')
+                  for root, dirs, files in os.walk(llama_dir, topdown=False):
+                      for f in files:
+                          if f.endswith(('.o', '.a', '.h', '.cpp', '.txt', '.cmake', '.ninja')) or 'CMakeFiles' in root:
+                              try:
+                                  os.remove(os.path.join(root, f))
+                              except Exception:
+                                  pass
+                      for d in dirs:
+                          if d in ('CMakeFiles', 'include', 'src', 'ggml-src'):
+                              try:
+                                  import shutil
+                                  shutil.rmtree(os.path.join(root, d), ignore_errors=True)
+                              except Exception:
+                                  pass
+          "
 
       - name: Build Mac
         run: |
@@ -71,7 +95,7 @@ jobs:
 
       - name: Compress
         run: |
-          # Purge unused byte-code and cache junk from the built app bundles to reduce artifact size
+          # Purge unused byte-code and cache junk from the built app bundles
           find dist/GhostDrive.app -name "*.pyc" -delete
           find dist/GhostDrive.app -name "__pycache__" -type d -exec rm -rf {} +
           find dist/GhostDriveAgents.app -name "*.pyc" -delete
