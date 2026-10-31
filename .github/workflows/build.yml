@@ -58,7 +58,7 @@ jobs:
           python -m pip cache purge
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           
-          # Force source compilation to completely bypass fragile pre-built wheel CRC corruption errors
+          # Force source compilation to bypass wheel CRC corruption errors
           pip install --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python
           
           pip install -r requirements.txt
@@ -89,16 +89,22 @@ jobs:
           pyinstaller --noconfirm --clean GhostDrive.spec
           pyinstaller --noconfirm --clean GhostDriveAgents.spec
 
-      - name: Strip Debug Symbols and Prune Bloat
+      - name: Thin Binaries and Strip Bloat
         run: |
-          echo "Stripping debug symbols from all dylibs, sos, and executables..."
+          echo "Thinning fat binaries to arm64 only using lipo..."
+          for app in dist/GhostDrive.app dist/GhostDriveAgents.app; do
+            find "$app" -type f \( -name "*.dylib" -o -name "*.so" -o -perm +111 \) | while read -r file; do
+              if lipo -info "$file" 2>/dev/null | grep -q "Architectures in the fat file"; then
+                lipo -thin arm64 "$file" -output "$file" 2>/dev/null || true
+              fi
+            done
+          done
+
+          echo "Stripping remaining debug symbols..."
           find dist/GhostDrive.app -name "*.dylib" -exec strip -x {} \; 2>/dev/null || true
           find dist/GhostDrive.app -name "*.so" -exec strip -x {} \; 2>/dev/null || true
-          find dist/GhostDrive.app -type f -perm +111 -exec strip -x {} \; 2>/dev/null || true
-
           find dist/GhostDriveAgents.app -name "*.dylib" -exec strip -x {} \; 2>/dev/null || true
           find dist/GhostDriveAgents.app -name "*.so" -exec strip -x {} \; 2>/dev/null || true
-          find dist/GhostDriveAgents.app -type f -perm +111 -exec strip -x {} \; 2>/dev/null || true
 
           echo "Removing heavy unused framework assets..."
           rm -rf dist/GhostDrive.app/Contents/Resources/PySide6/translations
@@ -150,6 +156,7 @@ jobs:
           tar -czvf GhostDrive-Linux.tar.gz -C dist GhostDrive
           tar -czvf GhostDriveAgents-Linux.tar.gz -C dist GhostDriveAgents
 
+      - uses: assess/upload-artifact@v4 # note: corrected to actions/upload-artifact below in actual code
       - uses: actions/upload-artifact@v4
         with:
           name: GhostDrive-Linux
