@@ -58,11 +58,31 @@ jobs:
           python -m pip cache purge
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           
-          # Compile llama-cpp-python from source on Mac to bypass wheel zip/CRC corruption errors
-          pip install --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python
+          # Use --prefer-binary to avoid full source-tree bloat while avoiding CRC lockups
+          pip install llama-cpp-python --prefer-binary --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/metal
           
           pip install -r requirements.txt
           pip install pyinstaller
+
+      - name: Purge Source Build Bloat from Site-Packages
+        run: |
+          python -c "
+          import site, os, shutil
+          for site_dir in site.getsitepackages():
+              llama_dir = os.path.join(site_dir, 'llama_cpp')
+              if os.path.exists(llama_dir):
+                  print(f'Pruning build trash in {llama_dir}')
+                  for root, dirs, files in os.walk(llama_dir):
+                      for f in files:
+                          if f.endswith(('.a', '.h', '.cpp', '.cmake', '.txt', '.o')):
+                              try:
+                                  os.remove(os.path.join(root, f))
+                              except:
+                                  pass
+                      for d in dirs:
+                          if d in ('CMakeFiles', 'include', 'src', 'ggml-src', 'build'):
+                              shutil.rmtree(os.path.join(root, d), ignore_errors=True)
+          "
 
       - name: Build Mac
         run: |
@@ -92,7 +112,7 @@ jobs:
           find dist/GhostDriveAgents.app -name "*.pyc" -delete
           find dist/GhostDriveAgents.app -name "__pycache__" -type d -exec rm -rf {} +
           
-          # Compress archives
+          # Compress archives with maximum compression
           zip -9 -r GhostDrive-macOS.zip dist/GhostDrive.app
           zip -9 -r GhostDriveAgents-macOS.zip dist/GhostDriveAgents.app
 
