@@ -156,7 +156,6 @@ jobs:
           tar -czvf GhostDrive-Linux.tar.gz -C dist GhostDrive
           tar -czvf GhostDriveAgents-Linux.tar.gz -C dist GhostDriveAgents
 
-      - uses: assess/upload-artifact@v4 # note: corrected to actions/upload-artifact below in actual code
       - uses: actions/upload-artifact@v4
         with:
           name: GhostDrive-Linux
