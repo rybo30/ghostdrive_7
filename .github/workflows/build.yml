@@ -89,6 +89,14 @@ jobs:
           pyinstaller --noconfirm --clean GhostDrive.spec
           pyinstaller --noconfirm --clean GhostDriveAgents.spec
 
+      - name: Audit Bundle Size & Heavy Files
+        run: |
+          echo "=== Top 25 Largest Files/Folders Inside GhostDrive.app ==="
+          du -h -d 4 dist/GhostDrive.app | sort -hr | head -n 25
+          
+          echo "=== Top 25 Largest Files/Folders Inside GhostDriveAgents.app ==="
+          du -h -d 4 dist/GhostDriveAgents.app | sort -hr | head -n 25
+
       - name: Thin Binaries and Strip Bloat
         run: |
           echo "Thinning fat binaries to arm64 only using lipo..."
