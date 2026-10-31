@@ -64,44 +64,35 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Slim down site-packages (Purge source build junk)
-        run: |
-          python -c "
-          import site, os
-          for site_dir in site.getsitepackages():
-              llama_dir = os.path.join(site_dir, 'llama_cpp')
-              if os.path.exists(llama_dir):
-                  print(f'Cleaning build artifacts in {llama_dir}')
-                  for root, dirs, files in os.walk(llama_dir, topdown=False):
-                      for f in files:
-                          if f.endswith(('.o', '.a', '.h', '.cpp', '.txt', '.cmake', '.ninja')) or 'CMakeFiles' in root:
-                              try:
-                                  os.remove(os.path.join(root, f))
-                              except Exception:
-                                  pass
-                      for d in dirs:
-                          if d in ('CMakeFiles', 'include', 'src', 'ggml-src'):
-                              try:
-                                  import shutil
-                                  shutil.rmtree(os.path.join(root, d), ignore_errors=True)
-                              except Exception:
-                                  pass
-          "
-
       - name: Build Mac
         run: |
           pyinstaller --noconfirm --clean GhostDrive.spec
           pyinstaller --noconfirm --clean GhostDriveAgents.spec
 
+      - name: Strip Debug Symbols and Prune Bloat
+        run: |
+          echo "Stripping debug symbols from all dylibs, sos, and executables..."
+          find dist/GhostDrive.app -name "*.dylib" -exec strip -x {} \; 2>/dev/null || true
+          find dist/GhostDrive.app -name "*.so" -exec strip -x {} \; 2>/dev/null || true
+          find dist/GhostDrive.app -type f -perm +111 -exec strip -x {} \; 2>/dev/null || true
+
+          find dist/GhostDriveAgents.app -name "*.dylib" -exec strip -x {} \; 2>/dev/null || true
+          find dist/GhostDriveAgents.app -name "*.so" -exec strip -x {} \; 2>/dev/null || true
+          find dist/GhostDriveAgents.app -type f -perm +111 -exec strip -x {} \; 2>/dev/null || true
+
+          echo "Removing heavy unused framework assets..."
+          rm -rf dist/GhostDrive.app/Contents/Resources/PySide6/translations
+          rm -rf dist/GhostDriveAgents.app/Contents/Resources/PySide6/translations
+
       - name: Compress
         run: |
-          # Purge unused byte-code and cache junk from the built app bundles
+          # Purge unused byte-code and cache junk
           find dist/GhostDrive.app -name "*.pyc" -delete
           find dist/GhostDrive.app -name "__pycache__" -type d -exec rm -rf {} +
           find dist/GhostDriveAgents.app -name "*.pyc" -delete
           find dist/GhostDriveAgents.app -name "__pycache__" -type d -exec rm -rf {} +
           
-          # Use maximum compression level (-9) for the macOS zip archives
+          # Compress archives
           zip -9 -r GhostDrive-macOS.zip dist/GhostDrive.app
           zip -9 -r GhostDriveAgents-macOS.zip dist/GhostDriveAgents.app
 
