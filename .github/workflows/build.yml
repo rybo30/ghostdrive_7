@@ -30,19 +30,26 @@ jobs:
           pyinstaller --noconfirm --clean GhostDrive.spec
           pyinstaller --noconfirm --clean GhostDriveAgents.spec
 
-      - name: Compress into Windows Folder
+      - name: Compress Windows Artifacts
         run: |
-          New-Item -ItemType Directory -Force -Path Windows/GhostDrive
-          New-Item -ItemType Directory -Force -Path Windows/GhostDriveAgents
-          Copy-Item -Recurse -Force dist/GhostDrive/* Windows/GhostDrive/
-          Copy-Item -Recurse -Force dist/GhostDriveAgents/* Windows/GhostDriveAgents/
-          
+          # Stage main GhostDrive into a folder named 'Windows'
+          New-Item -ItemType Directory -Force -Path Windows
+          Copy-Item -Recurse -Force dist/GhostDrive/* Windows/
           Compress-Archive -Path Windows -DestinationPath Windows.zip
+
+          # Stage GhostDriveAgents into a folder named 'Windows-Agents'
+          New-Item -ItemType Directory -Force -Path Windows-Agents
+          Copy-Item -Recurse -Force dist/GhostDriveAgents/* Windows-Agents/
+          Compress-Archive -Path Windows-Agents -DestinationPath Windows-Agents.zip
 
       - uses: actions/upload-artifact@v4
         with:
           name: Windows
           path: Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-Agents
+          path: Windows-Agents.zip
 
   build-mac:
     runs-on: macos-latest
@@ -118,7 +125,7 @@ jobs:
           rm -rf dist/GhostDrive.app/Contents/Resources/PySide6/translations
           rm -rf dist/GhostDriveAgents.app/Contents/Resources/PySide6/translations
 
-      - name: Compress into Mac Folder
+      - name: Compress Mac Artifacts
         run: |
           # Purge unused byte-code and cache junk
           find dist/GhostDrive.app -name "*.pyc" -delete
@@ -126,18 +133,24 @@ jobs:
           find dist/GhostDriveAgents.app -name "*.pyc" -delete
           find dist/GhostDriveAgents.app -name "__pycache__" -type d -exec rm -rf {} +
           
-          # Stage into a clean 'Mac' folder
+          # Stage and zip main GhostDrive into 'Mac' folder
           mkdir -p Mac
           cp -R dist/GhostDrive.app Mac/
-          cp -R dist/GhostDriveAgents.app Mac/
-          
-          # Compress archive with maximum compression
           zip -9 -r Mac.zip Mac
+          
+          # Stage and zip GhostDriveAgents into 'Mac-Agents' folder
+          mkdir -p Mac-Agents
+          cp -R dist/GhostDriveAgents.app Mac-Agents/
+          zip -9 -r Mac-Agents.zip Mac-Agents
 
       - uses: actions/upload-artifact@v4
         with:
           name: Mac
           path: Mac.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mac-Agents
+          path: Mac-Agents.zip
 
   build-linux:
     runs-on: ubuntu-latest
@@ -159,16 +172,23 @@ jobs:
           pyinstaller --noconfirm --clean GhostDrive.spec
           pyinstaller --noconfirm --clean GhostDriveAgents.spec
 
-      - name: Compress into Linux Folder
+      - name: Compress Linux Artifacts
         run: |
-          mkdir -p Linux/GhostDrive
-          mkdir -p Linux/GhostDriveAgents
-          cp -r dist/GhostDrive/* Linux/GhostDrive/
-          cp -r dist/GhostDriveAgents/* Linux/GhostDriveAgents/
-          
+          # Stage and tar main GhostDrive into 'Linux' folder
+          mkdir -p Linux
+          cp -r dist/GhostDrive/* Linux/
           tar -czvf Linux.tar.gz Linux
+
+          # Stage and tar GhostDriveAgents into 'Linux-Agents' folder
+          mkdir -p Linux-Agents
+          cp -r dist/GhostDriveAgents/* Linux-Agents/
+          tar -czvf Linux-Agents.tar.gz Linux-Agents
 
       - uses: actions/upload-artifact@v4
         with:
           name: Linux
           path: Linux.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Linux-Agents
+          path: Linux-Agents.tar.gz
