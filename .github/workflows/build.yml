@@ -32,12 +32,10 @@ jobs:
 
       - name: Compress Windows Artifacts
         run: |
-          # Stage main GhostDrive into a folder named 'Windows'
           New-Item -ItemType Directory -Force -Path Windows
           Copy-Item -Recurse -Force dist/GhostDrive/* Windows/
           Compress-Archive -Path Windows -DestinationPath Windows.zip
 
-          # Stage GhostDriveAgents into a folder named 'Windows-Agents'
           New-Item -ItemType Directory -Force -Path Windows-Agents
           Copy-Item -Recurse -Force dist/GhostDriveAgents/* Windows-Agents/
           Compress-Archive -Path Windows-Agents -DestinationPath Windows-Agents.zip
@@ -62,86 +60,28 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip cache purge
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           
-          # Force source compilation to bypass wheel CRC corruption errors
+          # Force source compilation to bypass wheel CRC corruption errors on Mac
           pip install --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python
           
           pip install -r requirements.txt
           pip install pyinstaller
-
-      - name: Purge Source Build Bloat from Site-Packages
-        run: |
-          python -c "
-          import site, os, shutil
-          for site_dir in site.getsitepackages():
-              llama_dir = os.path.join(site_dir, 'llama_cpp')
-              if os.path.exists(llama_dir):
-                  print(f'Pruning build trash in {llama_dir}')
-                  for root, dirs, files in os.walk(llama_dir):
-                      for f in files:
-                          if f.endswith(('.a', '.h', '.cpp', '.cmake', '.txt', '.o')):
-                              try:
-                                  os.remove(os.path.join(root, f))
-                              except:
-                                  pass
-                      for d in dirs:
-                          if d in ('CMakeFiles', 'include', 'src', 'ggml-src', 'build'):
-                              shutil.rmtree(os.path.join(root, d), ignore_errors=True)
-          "
 
       - name: Build Mac
         run: |
           pyinstaller --noconfirm --clean GhostDrive.spec
           pyinstaller --noconfirm --clean GhostDriveAgents.spec
 
-      - name: Audit Bundle Size & Heavy Files
-        run: |
-          echo "=== Top 25 Largest Files/Folders Inside GhostDrive.app ==="
-          du -h -d 4 dist/GhostDrive.app | sort -hr | head -n 25
-          
-          echo "=== Top 25 Largest Files/Folders Inside GhostDriveAgents.app ==="
-          du -h -d 4 dist/GhostDriveAgents.app | sort -hr | head -n 25
-
-      - name: Thin Binaries and Strip Bloat
-        run: |
-          echo "Thinning fat binaries to arm64 only using lipo..."
-          for app in dist/GhostDrive.app dist/GhostDriveAgents.app; do
-            find "$app" -type f \( -name "*.dylib" -o -name "*.so" -o -perm +111 \) | while read -r file; do
-              if lipo -info "$file" 2>/dev/null | grep -q "Architectures in the fat file"; then
-                lipo -thin arm64 "$file" -output "$file" 2>/dev/null || true
-              fi
-            done
-          done
-
-          echo "Stripping remaining debug symbols..."
-          find dist/GhostDrive.app -name "*.dylib" -exec strip -x {} \; 2>/dev/null || true
-          find dist/GhostDrive.app -name "*.so" -exec strip -x {} \; 2>/dev/null || true
-          find dist/GhostDriveAgents.app -name "*.dylib" -exec strip -x {} \; 2>/dev/null || true
-          find dist/GhostDriveAgents.app -name "*.so" -exec strip -x {} \; 2>/dev/null || true
-
-          echo "Removing heavy unused framework assets..."
-          rm -rf dist/GhostDrive.app/Contents/Resources/PySide6/translations
-          rm -rf dist/GhostDriveAgents.app/Contents/Resources/PySide6/translations
-
       - name: Compress Mac Artifacts
         run: |
-          # Purge unused byte-code and cache junk
-          find dist/GhostDrive.app -name "*.pyc" -delete
-          find dist/GhostDrive.app -name "__pycache__" -type d -exec rm -rf {} +
-          find dist/GhostDriveAgents.app -name "*.pyc" -delete
-          find dist/GhostDriveAgents.app -name "__pycache__" -type d -exec rm -rf {} +
-          
-          # Stage and zip main GhostDrive into 'Mac' folder
           mkdir -p Mac
           cp -R dist/GhostDrive.app Mac/
-          zip -9 -r Mac.zip Mac
-          
-          # Stage and zip GhostDriveAgents into 'Mac-Agents' folder
+          zip -r Mac.zip Mac
+
           mkdir -p Mac-Agents
           cp -R dist/GhostDriveAgents.app Mac-Agents/
-          zip -9 -r Mac-Agents.zip Mac-Agents
+          zip -r Mac-Agents.zip Mac-Agents
 
       - uses: actions/upload-artifact@v4
         with:
@@ -164,6 +104,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
           pip install -r requirements.txt
           pip install pyinstaller
 
@@ -174,12 +115,10 @@ jobs:
 
       - name: Compress Linux Artifacts
         run: |
-          # Stage and tar main GhostDrive into 'Linux' folder
           mkdir -p Linux
           cp -r dist/GhostDrive/* Linux/
           tar -czvf Linux.tar.gz Linux
 
-          # Stage and tar GhostDriveAgents into 'Linux-Agents' folder
           mkdir -p Linux-Agents
           cp -r dist/GhostDriveAgents/* Linux-Agents/
           tar -czvf Linux-Agents.tar.gz Linux-Agents
