@@ -138,12 +138,31 @@ class QwenWorkflow:
 
 # --- THE LOADER & INTERFACE ROUTER ---
 
+class ModelNotInstalledError(FileNotFoundError):
+    """A model in models.yaml whose GGUF file(s) aren't in MODELS_DIR."""
+
+    def __init__(self, model_id, display_name, missing_files):
+        self.model_id = model_id
+        self.display_name = display_name
+        self.missing_files = missing_files
+        super().__init__(
+            f"Model '{display_name}' is not installed. Missing: {', '.join(missing_files)} in {MODELS_DIR}"
+        )
+
+
 def load_model_from_config(model_id):
     global ACTIVE_LLM, ACTIVE_MODEL_ID
-    
+
     config = get_model_config(model_id)
     clip_path = config.get("clip_path")
     abs_clip_path = os.path.join(MODELS_DIR, clip_path) if clip_path else None
+
+    # 0. Fail clearly (and before unloading the current model) if the weights aren't on disk
+    if not (ACTIVE_LLM is not None and ACTIVE_MODEL_ID == model_id):
+        required = [config.get("path", "")] + ([clip_path] if clip_path else [])
+        missing = [f for f in required if not f or not os.path.isfile(os.path.join(MODELS_DIR, f))]
+        if missing:
+            raise ModelNotInstalledError(model_id, config.get("name", model_id), missing)
 
     # 1. Check if already loaded
     if ACTIVE_LLM is not None and ACTIVE_MODEL_ID == model_id:
