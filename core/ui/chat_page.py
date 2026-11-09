@@ -1,6 +1,6 @@
 # [chat_page.py] 
 
-import sys, os, gc, importlib
+import sys, os, gc, importlib, html
 import re
 import random
 import string
@@ -18,7 +18,7 @@ from .style_config import (
 from core.paths import MODELS_DIR
 from core.Everything_else.command_checker import check_for_commands
 from core.Everything_else.jynx_operator_ui import execute_command, get_random_prompt, soul_vent, soul_vent_summon
-from core.Everything_else.model_registry import load_model_from_config, get_model_config, get_all_model_configs, get_visual_description, unload_previous_model, sync_unregistered_models
+from core.Everything_else.model_registry import ModelNotInstalledError, load_model_from_config, get_model_config, get_all_model_configs, get_visual_description, unload_previous_model, sync_unregistered_models
 from core.Everything_else.ai_council import run_council_streaming
 from core.Everything_else.chat_manager import ChatLogManager
 from core.Everything_else.encryption_engine import GhostEngine
@@ -760,11 +760,24 @@ class ChatPage(QWidget):
         
         else:
             model_id = selected_key if selected_key else "jynx_summarizer"
+
+            try:
+                llm_fn, config = load_model_from_config(model_id)
+            except ModelNotInstalledError as e:
+                files = ", ".join(e.missing_files) or "(no file set in models.yaml)"
+                self.append_message(
+                    "SYSTEM",
+                    f"MODEL NOT INSTALLED: <b>{html.escape(e.display_name)}</b><br>"
+                    f"Missing file: {html.escape(files)}<br>"
+                    f"Add it to {html.escape(MODELS_DIR)} or choose another model.",
+                )
+                self.chat_history_data.pop()  # this prompt never got an answer
+                self.status_label.setText("● AI ENGINE ONLINE")
+                return
+
             self.current_model_name = selected_mode_text  # <-- Save current model name
             self.status_label.setText(f"● {selected_mode_text.upper()} ACTIVE")
             self.chat_area.insertHtml(f"<br><br><b style='color:{T.get('PROTOCOL_GOLD', '#FFB000')};'>{selected_mode_text.upper()}:</b><br>")
-            
-            llm_fn, config = load_model_from_config(model_id)
             m_tokens = config.get("max_tokens", 2048)
             m_temp = config.get("temperature", 0.5)
             
