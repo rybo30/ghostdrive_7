@@ -10,6 +10,7 @@ import ctypes
 
 # 1. IMPORT PATHS FIRST
 from core.paths import MODELS_DIR, EVERYTHING_ELSE, BASE_PATH
+from core.platform_utils import resolve_gpu_layers
 
 # 2. THE DLL SHIELD (Must run BEFORE the llama_cpp import)
 def setup_sovereign_dlls():
@@ -32,7 +33,7 @@ setup_sovereign_dlls()
 
 # 3. NOW PERFORM THE IMPORT
 try:
-    from llama_cpp import Llama
+    from llama_cpp import Llama, llama_supports_gpu_offload
     from llama_cpp.llama_chat_format import MoondreamChatHandler
 except Exception as e:
     print(f"[FATAL] ENGINE IMPORT ERROR: {e}")
@@ -200,11 +201,16 @@ def load_model_from_config(model_id):
                 model_defined_ctx = 4096
             config["arch_type"] = "llama"
 
+        # GPU offload: models.yaml n_gpu_layers wins; otherwise use the detected GPU
+        # (NVIDIA/CUDA or Apple Silicon/Metal) if this llama.cpp build supports it.
+        gpu_layers = resolve_gpu_layers(config.get("n_gpu_layers"), llama_supports_gpu_offload())
+        print(f"[Jynx] Loading {model_id} (n_gpu_layers={gpu_layers})")
+
         llm = Llama(
             model_path=model_path,
             chat_handler=chat_handler,
             n_ctx=model_defined_ctx, 
-            n_gpu_layers=config.get("n_gpu_layers", 0),
+            n_gpu_layers=gpu_layers,
             flash_attn=False,
             verbose=False
         )

@@ -63,6 +63,8 @@ core/Everything_else/models/
 
 `core/Everything_else/models/models.yaml` maps each persona to a GGUF filename, system prompt and sampling settings. The default persona uses `mistral-7b-instruct-v0.2.Q4_K_M.gguf`. Ollie transcription uses `whisper-large-v3-turbo-q4_0.gguf`.
 
+**GPU acceleration:** if your `llama-cpp-python` build supports GPU offload (Metal on Apple Silicon, or CUDA), models automatically load onto the detected GPU: all layers on Apple Silicon with 8 GB+ of memory, and a VRAM-based number of layers on NVIDIA. CPU-only builds stay on the CPU. To override this for one model, set `n_gpu_layers` on it in `models.yaml` (`0` forces CPU, `-1` puts every layer on the GPU). Run `python core/platform_utils.py` to see what was detected.
+
 > `llama-cpp-python` must import successfully. If it doesn't, `model_registry.py` exits the app when the Chat page loads.
 
 ## Data layout

@@ -1,6 +1,6 @@
 # =============================================================================
 # platform_utils.py — Cross-Platform Detection & Abstraction Layer
-# Supports: Windows 10+, Linux (Desktop & Raspberry Pi)
+# Supports: Windows 10+, Linux (Desktop & Raspberry Pi), macOS
 # =============================================================================
 
 import platform
@@ -12,6 +12,7 @@ from typing import Optional, Tuple, List
 class OSType(Enum):
     WINDOWS = "windows"
     LINUX = "linux"
+    MACOS = "macos"
     UNSUPPORTED = "unsupported"
 
 class LinuxDistro(Enum):
@@ -31,6 +32,8 @@ def get_os_type() -> OSType:
         return OSType.WINDOWS
     elif system == "linux":
         return OSType.LINUX
+    elif system == "darwin":
+        return OSType.MACOS
     else:
         return OSType.UNSUPPORTED
 
@@ -108,11 +111,37 @@ def has_nvidia_gpu() -> bool:
     
     return False
 
-def get_gpu_info() -> Optional[dict]:
-    """Get GPU information if NVIDIA GPU is present."""
-    if not has_nvidia_gpu():
+def _sysctl(name: str) -> Optional[str]:
+    try:
+        result = subprocess.run(["sysctl", "-n", name], capture_output=True, text=True, timeout=5)
+        return result.stdout.strip() if result.returncode == 0 else None
+    except Exception:
         return None
-    
+
+def get_apple_silicon_gpu_info() -> Optional[dict]:
+    """
+    GPU info for Apple Silicon Macs, which llama.cpp drives through Metal.
+    The GPU shares unified memory with the CPU, so memory_mb is total system RAM.
+    Intel Macs return None: llama.cpp's Metal path isn't worthwhile on their GPUs.
+    """
+    if get_os_type() != OSType.MACOS:
+        return None
+    if platform.machine() != "arm64" and _sysctl("hw.optional.arm64") != "1":
+        return None  # Intel Mac (also covers Python running under Rosetta)
+
+    memsize = _sysctl("hw.memsize")
+    return {
+        "name": _sysctl("machdep.cpu.brand_string") or "Apple Silicon",
+        "memory_mb": int(memsize) // (1024 * 1024) if memsize and memsize.isdigit() else 0,
+        "driver_version": "Metal",
+        "backend": "metal",
+    }
+
+def get_gpu_info() -> Optional[dict]:
+    """Get GPU information for an NVIDIA GPU (CUDA) or Apple Silicon (Metal), if present."""
+    if not has_nvidia_gpu():
+        return get_apple_silicon_gpu_info()
+
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=name,memory.total,driver_version", "--format=csv,noheader,nounits"],
@@ -125,23 +154,30 @@ def get_gpu_info() -> Optional[dict]:
             return {
                 "name": parts[0] if len(parts) > 0 else "Unknown",
                 "memory_mb": int(parts[1]) if len(parts) > 1 else 0,
-                "driver_version": parts[2] if len(parts) > 2 else "Unknown"
+                "driver_version": parts[2] if len(parts) > 2 else "Unknown",
+                "backend": "cuda",
             }
     except Exception:
         pass
-    
-    return {"name": "NVIDIA GPU (details unavailable)", "memory_mb": 0, "driver_version": "Unknown"}
 
-def get_recommended_gpu_layers() -> int:
+    return {"name": "NVIDIA GPU (details unavailable)", "memory_mb": 0, "driver_version": "Unknown", "backend": "cuda"}
+
+def get_recommended_gpu_layers(gpu_info: Optional[dict] = None) -> int:
     """
     Recommend number of GPU layers for llama.cpp based on available VRAM.
     Returns -1 for 'all layers on GPU', 0 for 'CPU only'.
     """
-    gpu_info = get_gpu_info()
-    
+    if gpu_info is None:
+        gpu_info = get_gpu_info()
+
     if not gpu_info:
         return 0  # CPU only
-    
+
+    if gpu_info.get("backend") == "metal":
+        # Unified memory: Metal can use most of system RAM, so offload every layer.
+        # Below 8 GB a 7B model plus the OS doesn't reliably fit; stay on CPU.
+        return -1 if gpu_info.get("memory_mb", 0) >= 8000 else 0
+
     vram_mb = gpu_info.get("memory_mb", 0)
     
     if vram_mb >= 24000:    # 24GB+ (RTX 4090, etc.)
@@ -156,6 +192,31 @@ def get_recommended_gpu_layers() -> int:
         return 12
     else:
         return 0            # CPU only for low VRAM
+
+_DEFAULT_GPU_LAYERS = None
+
+def resolve_gpu_layers(configured, offload_supported: bool, gpu_info: Optional[dict] = None) -> int:
+    """
+    n_gpu_layers to pass to llama.cpp for one model.
+
+    - An explicit n_gpu_layers in models.yaml always wins (0 forces CPU).
+    - Otherwise use the hardware recommendation, but only if this llama.cpp
+      build can offload at all (a CPU-only wheel can't, whatever the hardware).
+    The hardware probe runs once per process and is cached.
+    """
+    global _DEFAULT_GPU_LAYERS
+    if configured is not None:
+        try:
+            return int(configured)
+        except (TypeError, ValueError):
+            pass
+    if not offload_supported:
+        return 0
+    if gpu_info is not None:
+        return get_recommended_gpu_layers(gpu_info)
+    if _DEFAULT_GPU_LAYERS is None:
+        _DEFAULT_GPU_LAYERS = get_recommended_gpu_layers()
+    return _DEFAULT_GPU_LAYERS
 
 # =============================================================================
 # Command Availability Checks
@@ -250,10 +311,14 @@ def print_system_summary():
     print("-" * 50)
     
     if gpu:
+        layers = get_recommended_gpu_layers(gpu)
         print(f"GPU:            {gpu['name']}")
-        print(f"VRAM:           {gpu['memory_mb']} MB")
+        if gpu.get("backend") == "metal":
+            print(f"Unified Memory: {gpu['memory_mb']} MB (shared with CPU)")
+        else:
+            print(f"VRAM:           {gpu['memory_mb']} MB")
         print(f"Driver:         {gpu['driver_version']}")
-        print(f"Recommended GPU Layers: {get_recommended_gpu_layers()}")
+        print(f"Recommended GPU Layers: {'all' if layers == -1 else layers}")
     else:
         print("GPU:            None detected (CPU inference)")
     
