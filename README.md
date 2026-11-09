@@ -112,6 +112,8 @@ uv pip install --python .venv/bin/python pytest   # or: pip install pytest
 
 The suite covers the parts that don't need a GUI or models: key derivation, the vault, file encryption, identities and shared secrets, the inventory and manifest stores, paths, and chat-protocol parsing. Every test runs in a temporary directory, never touches real vault data, and stubs out the real system commands.
 
+GitHub Actions runs the suite on Linux, macOS and Windows for every pull request and every push to `main` (`.github/workflows/tests.yml`). CI installs only what the tests import, not the full `requirements.txt`.
+
 ## Building
 
 `.github/workflows/build.yml` builds standalone apps for Windows, macOS and Linux with PyInstaller (`GhostDrive.spec`, `GhostDriveAgents.spec`) whenever a `v*` tag is pushed, or when the workflow is run manually.

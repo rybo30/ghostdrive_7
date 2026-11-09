@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from cryptography.fernet import Fernet
 
@@ -12,9 +14,9 @@ def isolated_inventory(tmp_path, monkeypatch):
 
 
 def test_inventory_path_naming(isolated_inventory):
-    assert inv.get_inventory_path("bob", "Tools").endswith("bob/inv_tools.enc")
+    assert inv.get_inventory_path("bob", "Tools").endswith(os.path.join("bob", "inv_tools.enc"))
     # Already-prefixed IDs are used as-is
-    assert inv.get_inventory_path("bob", "inv_abc.enc").endswith("bob/inv_abc.enc")
+    assert inv.get_inventory_path("bob", "inv_abc.enc").endswith(os.path.join("bob", "inv_abc.enc"))
 
 
 def test_load_missing_sheet_returns_default_schema(fernet):
