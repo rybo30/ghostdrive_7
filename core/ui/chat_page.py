@@ -223,6 +223,26 @@ class StreamWorker(QObject):
         except Exception as e:
             self.error.emit(str(e))
 
+class ModelLoadWorker(QObject):
+    """Loads a model off the GUI thread so picking one in the dropdown doesn't freeze the window."""
+    loaded = Signal(str)                    # model_id
+    not_installed = Signal(str, object)     # model_id, ModelNotInstalledError
+    failed = Signal(str, str)               # model_id, error message
+
+    def __init__(self, model_id):
+        super().__init__()
+        self.model_id = model_id
+
+    def run(self):
+        try:
+            load_model_from_config(self.model_id)
+            self.loaded.emit(self.model_id)
+        except ModelNotInstalledError as e:
+            self.not_installed.emit(self.model_id, e)
+        except Exception as e:
+            self.failed.emit(self.model_id, str(e))
+
+
 class CouncilStreamWorker(QObject):
     token_received = Signal(object)
     finished = Signal()
@@ -326,6 +346,13 @@ class ChatPage(QWidget):
         
         self._active_thread = None
         self._active_worker = None
+        self._generating = False       # a reply is streaming (single model or council)
+
+        # Model preloading (load on dropdown pick, not on first message)
+        self._load_thread = None
+        self._load_worker = None
+        self._loading_model_id = None  # model currently loading in the background
+        self._pending_model_id = None  # newest pick made while another load was running
 
         # PDF
         self.active_document_context = ""
@@ -631,6 +658,85 @@ class ChatPage(QWidget):
             # Instantly bounce back to placeholder so + Add Model can be clicked again
             self.model_selector.setCurrentIndex(0)
             self.trigger_huggingface_hub_ui()
+        elif selected_data and selected_data not in ("select_model_placeholder", "multi_model_reasoning"):
+            self.preload_model(selected_data)
+
+    # --- Model preloading -------------------------------------------------
+
+    def preload_model(self, model_id):
+        """Start loading model_id in the background as soon as it's picked."""
+        if self._generating:
+            # Loading now would unload the model that's mid-reply; it loads on the next send instead.
+            return
+        if self._loading_model_id:
+            # llama.cpp loads can't be cancelled; load the newest pick once this one finishes.
+            self._pending_model_id = model_id
+            return
+
+        self._loading_model_id = model_id
+        self._pending_model_id = None
+        name = self.model_selector.currentText()
+        self.status_label.setText(f"● LOADING {name.upper()}…")
+
+        self._load_thread = QThread()
+        self._load_worker = ModelLoadWorker(model_id)
+        self._load_worker.moveToThread(self._load_thread)
+        self._load_thread.started.connect(self._load_worker.run)
+        self._load_worker.loaded.connect(self._on_model_loaded)
+        self._load_worker.not_installed.connect(self._on_model_not_installed)
+        self._load_worker.failed.connect(self._on_model_load_failed)
+        self._load_thread.start()
+
+    def _finish_model_load(self):
+        """Tear down the load thread; start the next pick if one is queued. Returns True if one was."""
+        if self._load_thread:
+            self._load_thread.quit()
+            self._load_thread.wait()
+            self._load_thread.deleteLater()
+        if self._load_worker:
+            self._load_worker.deleteLater()
+        self._load_thread = self._load_worker = None
+        self._loading_model_id = None
+
+        pending, self._pending_model_id = self._pending_model_id, None
+        if pending and pending == self.model_selector.currentData():
+            self.preload_model(pending)
+            return True
+        return False
+
+    def _model_display_name(self, model_id):
+        idx = self.model_selector.findData(model_id)
+        return self.model_selector.itemText(idx) if idx >= 0 else model_id
+
+    def _on_model_loaded(self, model_id):
+        if self._finish_model_load():
+            return  # superseded by a newer pick, which is now loading
+        self.status_label.setText(f"● {self._model_display_name(model_id).upper()} READY")
+
+    def _on_model_not_installed(self, model_id, err):
+        if self._finish_model_load():
+            return
+        self._show_model_not_installed(err)
+        self.status_label.setText("● AI ENGINE ONLINE")
+
+    def _on_model_load_failed(self, model_id, message):
+        if self._finish_model_load():
+            return
+        self.append_message("SYSTEM", f"FAILED TO LOAD {html.escape(self._model_display_name(model_id))}: {html.escape(message)}")
+        self.status_label.setText("● AI ENGINE ONLINE")
+
+    def _show_model_not_installed(self, e):
+        files = ", ".join(e.missing_files) or "(no file set in models.yaml)"
+        self.append_message(
+            "SYSTEM",
+            f"MODEL NOT INSTALLED: <b>{html.escape(e.display_name)}</b><br>"
+            f"Missing file: {html.escape(files)}<br>"
+            f"Add it to {html.escape(MODELS_DIR)} or choose another model.",
+        )
+
+    def _on_generation_error(self, message):
+        self._generating = False
+        self.append_message("SYSTEM", f"ERROR: {message}")
 
     def refresh_model_dropdown(self):
         self.model_selector.blockSignals(True)
@@ -719,9 +825,15 @@ class ChatPage(QWidget):
         prompt = self.input_line.toPlainText().strip()
         image_path = self.current_image_path
 
-        if not prompt and not image_path: 
+        if not prompt and not image_path:
             return
-        
+
+        # A model is still loading in the background: don't start a second, concurrent load.
+        # The typed message stays in the input box so it can be sent once the model is ready.
+        if self._loading_model_id:
+            self.append_message("SYSTEM", f"{html.escape(self._model_display_name(self._loading_model_id))} is still loading. Send again once the status shows READY.")
+            return
+
         # 1. Update UI View Canvas
         self.append_message("You", prompt if prompt else "[FILE ATTACHED]")
         if image_path: 
@@ -764,13 +876,7 @@ class ChatPage(QWidget):
             try:
                 llm_fn, config = load_model_from_config(model_id)
             except ModelNotInstalledError as e:
-                files = ", ".join(e.missing_files) or "(no file set in models.yaml)"
-                self.append_message(
-                    "SYSTEM",
-                    f"MODEL NOT INSTALLED: <b>{html.escape(e.display_name)}</b><br>"
-                    f"Missing file: {html.escape(files)}<br>"
-                    f"Add it to {html.escape(MODELS_DIR)} or choose another model.",
-                )
+                self._show_model_not_installed(e)
                 self.chat_history_data.pop()  # this prompt never got an answer
                 self.status_label.setText("● AI ENGINE ONLINE")
                 return
@@ -796,13 +902,14 @@ class ChatPage(QWidget):
 
         # 4. Thread Safety Management Loops
         self._active_worker.moveToThread(self._active_thread)
-        self._active_worker.error.connect(lambda e: self.append_message("SYSTEM", f"ERROR: {e}"))
+        self._active_worker.error.connect(self._on_generation_error)
         self._active_worker.finished.connect(self._active_thread.quit)
         self._active_worker.finished.connect(self._active_worker.deleteLater)
         self._active_thread.finished.connect(self._active_thread.deleteLater)
         self._active_thread.started.connect(self._active_worker.run)
         
         self._active_worker.finished.connect(lambda: self.status_label.setText("● AI ENGINE ONLINE"))
+        self._generating = True
         self._active_thread.start()
 
     def _handle_council_event(self, event):
@@ -846,6 +953,7 @@ class ChatPage(QWidget):
 
     def _finalize_ai_response(self):
         """Finalizes the session text generation loop and commits updates to local storage."""
+        self._generating = False
         if hasattr(self, 'status_label'):
             self.status_label.setText("")
             
