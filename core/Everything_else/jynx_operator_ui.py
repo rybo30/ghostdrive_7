@@ -460,8 +460,7 @@ def run_file_shredder():
     Immediately opens a file picker allowing selection of multiple files.
     Each file is overwritten 3 times before permanent deletion.
     """
-    import tkinter as tk
-    from tkinter import filedialog
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
     import secrets
 
     def shred_logic(path):
@@ -484,16 +483,25 @@ def run_file_shredder():
             return False
 
     # 1. Open Multi-File Picker Immediately
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
-    
-    # This allows selecting multiple files at once without a prompt
-    files_selected = filedialog.askopenfilenames(title="SELECT TARGETS FOR INCINERATION")
-    root.destroy()
+    # Uses Qt's dialog: creating a Tk root inside the running Qt app aborts on macOS.
+    files_selected, _ = QFileDialog.getOpenFileNames(None, "SELECT TARGETS FOR INCINERATION")
 
     if not files_selected:
         return "⚠️ Shredding aborted: No targets selected."
+
+    # Confirm before irreversible deletion
+    preview = "\n".join(os.path.basename(p) for p in files_selected[:10])
+    if len(files_selected) > 10:
+        preview += f"\n…and {len(files_selected) - 10} more"
+    answer = QMessageBox.warning(
+        None,
+        "CONFIRM INCINERATION",
+        f"Permanently overwrite and delete {len(files_selected)} file(s)?\n\n{preview}\n\nThis cannot be undone.",
+        QMessageBox.Yes | QMessageBox.Cancel,
+        QMessageBox.Cancel,
+    )
+    if answer != QMessageBox.Yes:
+        return "⚠️ Shredding aborted: Cancelled by operator."
 
     # 2. Execute
     success_count = 0
