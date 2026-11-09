@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Build output
+build/
+dist/
+
+# User data — encrypted vaults, salts, keys (never commit)
+core/Everything_else/vault/
+core/Everything_else/inventory/
+core/Everything_else/journal/
+core/Everything_else/projects/
+core/Everything_else/health/
+*.enc
+salt_*.bin
+
+# Model weights
+*.gguf
+
+# OS
+.DS_Store
+._*
