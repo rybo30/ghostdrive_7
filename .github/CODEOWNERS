@@ -1,0 +1,6 @@
+# Code owners are automatically requested for review on pull requests
+# that touch the files they own. See:
+# https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# rybo30 owns everything in the repository.
+* @rybo30
