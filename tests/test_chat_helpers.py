@@ -78,7 +78,7 @@ def test_check_for_commands_keywords(calls, user_input, protocol):
 
 def test_chat_history_save_and_load(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # history_manager writes relative to the cwd
-    t = iter([1000.0, 1000.0, 2000.0, 2000.0])
+    t = iter([1000.0, 2000.0])
     monkeypatch.setattr(history_manager.time, "time", lambda: next(t))
 
     history_manager.save_chat_session("alice", "first chat", "<p>1</p>")
@@ -89,7 +89,6 @@ def test_chat_history_save_and_load(tmp_path, monkeypatch):
     assert len(sessions[0]["title"]) == 50
 
 
-@pytest.mark.xfail(strict=True, reason="Known bug: sessions saved in the same second overwrite each other")
 def test_chat_history_same_second_keeps_both(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(history_manager.time, "time", lambda: 1000.0)

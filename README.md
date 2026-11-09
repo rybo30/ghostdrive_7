@@ -110,7 +110,7 @@ uv pip install --python .venv/bin/python pytest   # or: pip install pytest
 .venv/bin/python -m pytest
 ```
 
-The suite covers the parts that don't need a GUI or models: key derivation, the vault, file encryption, identities and shared secrets, the inventory and manifest stores, paths, and chat-protocol parsing. Every test runs in a temporary directory, never touches real vault data, and stubs out the real system commands. One test is marked `xfail` because it documents a known bug: chat sessions saved within the same second overwrite each other.
+The suite covers the parts that don't need a GUI or models: key derivation, the vault, file encryption, identities and shared secrets, the inventory and manifest stores, paths, and chat-protocol parsing. Every test runs in a temporary directory, never touches real vault data, and stubs out the real system commands.
 
 ## Building
 

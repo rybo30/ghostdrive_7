@@ -1,4 +1,4 @@
-import json, os, time
+import json, os, time, uuid
 
 def get_log_dir(username):
     path = os.path.join("user_data", username, "chat_logs")
@@ -7,11 +7,13 @@ def get_log_dir(username):
 
 def save_chat_session(username, title, full_html_content):
     log_dir = get_log_dir(username)
-    # Use timestamp as filename for easy chronological sorting
-    filename = f"{int(time.time())}.json" 
+    # Timestamp prefix keeps files chronological; the random suffix stops
+    # sessions saved within the same second from overwriting each other.
+    now = time.time()
+    filename = f"{int(now)}_{uuid.uuid4().hex[:8]}.json"
     data = {
         "title": title[:50], # Truncate for the sidebar
-        "timestamp": time.time(),
+        "timestamp": now,
         "content": full_html_content
     }
     with open(os.path.join(log_dir, filename), "w") as f:
