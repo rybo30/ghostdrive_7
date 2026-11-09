@@ -8,7 +8,7 @@ import whisper
 import torch
 from PySide6.QtCore import QThread, Signal
 
-from Everything_else.model_registry import load_model_from_config, unload_previous_model
+from core.Everything_else.model_registry import load_model_from_config, unload_previous_model
 from core.paths import MODELS_DIR, USER_DATA 
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))

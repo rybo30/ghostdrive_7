@@ -3,7 +3,7 @@
 # =============================================================
 import json, os, re
 from cryptography.fernet import Fernet
-from model_registry import load_model_from_config
+from core.Everything_else.model_registry import load_model_from_config
 
 # --- CONFIGURATION & MAPPING ---
 PRETTY_NAMES = {
