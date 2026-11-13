@@ -1,5 +1,5 @@
 # =============================================================
-# AI COUNCIL v8.1 — CHAT HISTORY & DYNAMIC TOKEN BUDGETING
+# AI COUNCIL v8.2 — CHAT HISTORY & DYNAMIC TOKEN BUDGETING
 # =============================================================
 import json, os, re
 from cryptography.fernet import Fernet
@@ -103,7 +103,7 @@ FIELD_DESCRIPTIONS = {
     "jynx_expert_advocate": "playing devil's advocate and finding holes in arguments",
     "jynx_expert_quant_finance": "advanced financial data, trading, and risk models",
     "jynx_expert_creative": "brainstorming unique ideas and outside-the-box thinking",
-    "jynx_expert_astrology": "astrology charts, star patterns, and macro trends",
+    "jynx_expert_astrology": "structural frameworks, pattern correlation, and macro systems",
     "jynx_expert_advanced_math": "complex math proofs, calculus, and advanced statistics",
     "jynx_expert_malicious_analysis": "thinking like a hacker to test for system gaps",
     "jynx_expert_mopey_psych": "unfiltered, brutally realistic views on life and habits",
@@ -125,7 +125,6 @@ def format_chat_log(chat_history: list) -> str:
     for msg in chat_history:
         role = msg.get("role", "Unknown")
         content = msg.get("content", "").strip()
-        # Strip internal UI HTML rendering tags if present
         content = re.sub(r"<[^>]*>", "", content)
         if content:
             sender = "Operator" if role.lower() == "you" else role
@@ -179,21 +178,17 @@ def run_council_streaming(user_prompt, image_path=None, username="Operator", fer
     previous_notes = ""
     full_neural_map = get_user_profile_context(username, fernet) if fernet else f"\n[OPERATOR PERSONALITY MAP]\nCallsign: {username}\n"
     
-    # 1. Parse and copy history safely so we don't truncate user logs on disk
     if chat_history is None:
         chat_history = []
     working_history = list(chat_history)
     
-    # Extract the real context capability from your judge configuration profile
     _, judge_config = load_model_from_config("jynx_judge")
     MAX_CONTEXT_WINDOW = judge_config.get("actual_ctx_window", 4096)
     MAX_RESPONSE_RESERVE = 1024 
     
-    # Calculate fixed overhead bounds
     neural_overhead = estimate_tokens(full_neural_map)
     prompt_overhead = estimate_tokens(user_prompt)
     
-    # SLIDING WINDOW SLIDER: Evict oldest turns until the transcript fits safely
     while working_history:
         full_chat_log_block = "\n[CONVERSATION HISTORY LOG]\n" + format_chat_log(working_history)
         chat_overhead = estimate_tokens(full_chat_log_block)
@@ -202,13 +197,11 @@ def run_council_streaming(user_prompt, image_path=None, username="Operator", fer
         if total_footprint <= MAX_CONTEXT_WINDOW:
             break
             
-        working_history.pop(0)  # Evict oldest entry from memory stack
+        working_history.pop(0)
         
-    # Re-finalize the context string using the safely minimized timeline history
     full_chat_log_block = "\n[CONVERSATION HISTORY LOG]\n" + format_chat_log(working_history)
     chat_overhead = estimate_tokens(full_chat_log_block)
     
-    # Recalculate dynamic budget boundaries
     allowed_notes_budget = MAX_CONTEXT_WINDOW - (neural_overhead + chat_overhead + prompt_overhead + MAX_RESPONSE_RESERVE)
     if allowed_notes_budget < 500:
         allowed_notes_budget = 500
@@ -262,7 +255,7 @@ Response:"""
         if token:
             summary_buffer += token
             if "TASK:" in summary_buffer:
-                break  # Hard crash out if model attempts to repeat instructions
+                break
                 
             display_token = token.replace("SUMMARY:", "**Target:**").replace("EXPERTS:", "\n**Experts:**")
             yield ("summary", display_token)
@@ -301,7 +294,6 @@ Response:"""
         field = FIELD_DESCRIPTIONS.get(expert_id, "expertise")
         yield ("expert_start", expert_name)
 
-        # Dynamic Window Guard Formula
         notes_lines = previous_notes.strip().split("\n\n")
         while notes_lines and estimate_tokens("\n\n".join(notes_lines)) > allowed_notes_budget:
             notes_lines.pop(0) 
@@ -336,8 +328,6 @@ Response:"""
         ):
             if token:
                 expert_buffer += token
-                
-                # Double guard check to instantly crash out if a structural tag slips through
                 if "[OPERATOR" in expert_buffer or "[WHAT]" in expert_buffer or "[WHY]" in expert_buffer:
                     break
                     

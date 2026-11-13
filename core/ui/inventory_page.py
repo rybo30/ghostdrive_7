@@ -1,17 +1,18 @@
+# [inventory_page.py] - Fixed row indexing, bottom appending, and data sync
+
 import os
 import sys
 import csv
 from datetime import datetime
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QTableWidget, QLineEdit,
-    QHBoxLayout, QMessageBox, QDialog, QFormLayout, QTableWidgetItem, 
-    QHeaderView, QLabel, QTabBar
+    QHBoxLayout, QMessageBox, QDialog, QTableWidgetItem, 
+    QHeaderView, QLabel, QTabBar, QMenu
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, QPoint
+from PySide6.QtGui import QColor, QAction
 
-# Import paths and manager mechanics
-from core.paths import CORE_DIR, EVERYTHING_ELSE, INVENTORY_DIR
+from core.paths import EVERYTHING_ELSE, INVENTORY_DIR
 
 if EVERYTHING_ELSE not in sys.path:
     sys.path.insert(0, EVERYTHING_ELSE)
@@ -21,9 +22,8 @@ from inventory_manager import (
 )
 
 from .style_config import (
-    FONT_FAMILY, FONT_SIZE,
-    COLOR_BG, COLOR_FG, COLOR_ACCENT, COLOR_BUTTON, COLOR_HIGHLIGHT,
-    STYLE_LABEL, STYLE_BUTTON, COLOR_PAGE_BG, COLOR_BORDER, ghost_prompt, ghost_alert, TacticalDialog
+    FONT_FAMILY, COLOR_BG, COLOR_FG, COLOR_ACCENT, COLOR_BUTTON, 
+    STYLE_BUTTON, COLOR_PAGE_BG, COLOR_BORDER, ghost_prompt, ghost_alert, TacticalDialog
 )
 
 class InventoryPage(QWidget):
@@ -34,14 +34,17 @@ class InventoryPage(QWidget):
         self.fernet = fernet
         self.current_sheet_name = "inventory"
         
-        # Internal guard to prevent recursion loops during itemChanged signals
+        self.schema = [] 
+        self.data = []
         self._is_refreshing = False 
 
-        # 1. Main Layout & Style
+        # 1. Main Layout & Styling
         self.setStyleSheet(f"background-color: {COLOR_BG}; color: {COLOR_FG}; font-family: '{FONT_FAMILY}';")
         self.layout = QVBoxLayout(self)
 
-        # 2. Search Bar
+        # 2. Top Bar (Search + Encryption Status Pill)
+        top_bar_layout = QHBoxLayout()
+        
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search inside current sheet...")
         self.search_bar.setStyleSheet(f"""
@@ -50,13 +53,30 @@ class InventoryPage(QWidget):
                 color: {COLOR_FG}; 
                 border: 1px solid {COLOR_ACCENT};
                 border-radius: 4px;
-                padding: 5px;
+                padding: 6px;
             }}
         """)
         self.search_bar.textChanged.connect(self.filter_inventory)
-        self.layout.addWidget(self.search_bar)
+        top_bar_layout.addWidget(self.search_bar, stretch=3)
 
-        # 3. Tab Management Section
+        self.status_pill = QLabel("🔒 Encrypted Vault Synced")
+        self.status_pill.setStyleSheet(f"""
+            QLabel {{
+                background-color: {COLOR_BUTTON};
+                color: {COLOR_ACCENT};
+                border: 1px solid {COLOR_BORDER};
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+                font-size: 11px;
+            }}
+        """)
+        self.status_pill.setAlignment(Qt.AlignCenter)
+        top_bar_layout.addWidget(self.status_pill, stretch=1)
+        
+        self.layout.addLayout(top_bar_layout)
+
+        # 3. Tab Navigation Section
         tab_container = QHBoxLayout()
         self.tabs = QTabBar()
         self.tabs.setExpanding(False)
@@ -65,7 +85,7 @@ class InventoryPage(QWidget):
             QTabBar::tab {{
                 background: {COLOR_BUTTON};
                 color: {COLOR_FG};
-                padding: 8px 15px;
+                padding: 8px 16px;
                 border: 1px solid {COLOR_BORDER};
                 border-top-left-radius: 4px;
                 border-top-right-radius: 4px;
@@ -89,16 +109,13 @@ class InventoryPage(QWidget):
         tab_container.addStretch()
         self.layout.addLayout(tab_container)
 
-        # 4. Spreadsheet Configuration (True Inline Editing & Fluid Columns)
+        # 4. Table Setup & Context Menus
         self.table = QTableWidget()
         self.table.verticalHeader().setVisible(False)
-        
-        # Enable sorting when a user clicks a column header
-        self.table.setSortingEnabled(True)
-        
-        # SPREADSHEET MECHANICS: Allow editing by double-clicking or typing
+        # Disabled automatic sorting to keep 1-to-1 visual row index matching self.data
+        self.table.setSortingEnabled(False)
         self.table.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.AnyKeyPressed)
-        self.table.setSelectionBehavior(QTableWidget.SelectItems) 
+        self.table.setSelectionBehavior(QTableWidget.SelectItems)
         
         self.table.setStyleSheet(f"""
             QTableWidget {{
@@ -112,24 +129,34 @@ class InventoryPage(QWidget):
                 color: #000000;  
                 border: 1px solid {COLOR_BG};
                 font-weight: bold;
-                padding: 4px;
+                padding: 5px;
             }}
         """)
         
-        # --- 🆕 UNLOCKED & RESIZABLE COLUMNS SECTIONS ---
         header = self.table.horizontalHeader()
-        
-        # 1. Allow the user to manually click and drag column edges
         header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setStretchLastSection(True)
+        header.setContextMenuPolicy(Qt.CustomContextMenu)
+        header.customContextMenuRequested.connect(self.show_header_context_menu)
         
-        # 2. Cascade resizing options or stretch the last section to keep the UI clean
-        header.setStretchLastSection(True) 
-        
-        # Connect the cell mutation listener
         self.table.itemChanged.connect(self.handle_cell_edited)
         self.layout.addWidget(self.table)
 
-        # 5. Core Command Operations Actions
+        # 5. Live Summary Footer Bar
+        self.summary_bar = QLabel("Total Items: 0 | Metrics Summary: Ready")
+        self.summary_bar.setStyleSheet(f"""
+            QLabel {{
+                background-color: {COLOR_BUTTON};
+                color: {COLOR_FG};
+                border: 1px solid {COLOR_BORDER};
+                border-radius: 4px;
+                padding: 8px;
+                font-weight: bold;
+            }}
+        """)
+        self.layout.addWidget(self.summary_bar)
+
+        # 6. Action Button Controls
         btn_layout = QHBoxLayout()
         buttons = [
             ("Add Row", self.add_blank_row),
@@ -148,15 +175,11 @@ class InventoryPage(QWidget):
 
         self.layout.addLayout(btn_layout)
 
-        # 6. Initialize State Tracking
-        self.schema = [] 
-        self.data = []
-        self.load_sheet_list() 
-        self.refresh_table()
+        # 7. Initial Load
+        self.load_sheet_list(load_default_data=True)
 
-    def load_sheet_list(self):
-        """Fetches sheets across encrypted space and updates the navigation tabs."""
-        self.tabs.blockSignals(True) 
+    def load_sheet_list(self, load_default_data=False):
+        self.tabs.blockSignals(True)
         while self.tabs.count() > 0:
             self.tabs.removeTab(0)
             
@@ -164,16 +187,26 @@ class InventoryPage(QWidget):
         for s in sheets:
             self.tabs.addTab(s.replace("_", " ").capitalize())
         
-        # Realignment of active index selection
+        target_index = 0
         for i in range(self.tabs.count()):
             if self.tabs.tabText(i).lower().replace(" ", "_") == self.current_sheet_name:
-                self.tabs.setCurrentIndex(i)
+                target_index = i
                 break
+        
+        self.tabs.setCurrentIndex(target_index)
         self.tabs.blockSignals(False)
 
+        if load_default_data:
+            payload = load_inventory(self.username, self.fernet, self.current_sheet_name)
+            self.schema = payload.get("schema", ["name", "quantity", "location", "last_checked"])
+            self.data = payload.get("data", [])
+            self.refresh_table()
+
     def switch_sheet(self, index):
-        """Saves any uncommitted changes to disk before checking out another sheet target."""
-        if index == -1: return
+        if index == -1: 
+            return
+        
+        self.table.clearFocus()
         
         if hasattr(self, 'schema') and self.schema:
             save_inventory(self.username, {"schema": self.schema, "data": self.data}, self.fernet, self.current_sheet_name)
@@ -186,7 +219,6 @@ class InventoryPage(QWidget):
         self.refresh_table()
 
     def refresh_table(self):
-        """Redraws the table canvas cleanly without breaking synchronization chains."""
         self._is_refreshing = True 
         self.table.clear()
         self.table.setColumnCount(len(self.schema))
@@ -206,35 +238,50 @@ class InventoryPage(QWidget):
                     
                 self.table.setItem(row_idx, col_idx, cell_item)
                 
-        # --- 🆕 AUTO-FIT TO INSIDE TEXT ---
-        # Automatically adjust column widths based on cell contents and headers
         self.table.resizeColumnsToContents()
-        
         self._is_refreshing = False
+        self.update_summary_footer()
+
+    def update_summary_footer(self):
+        total_rows = len(self.data)
+        numeric_sums = {}
+        
+        for key in self.schema:
+            total_sum = 0.0
+            is_numeric = True
+            for row in self.data:
+                val = row.get(key, "")
+                try:
+                    total_sum += float(val)
+                except ValueError:
+                    is_numeric = False
+                    break
+            if is_numeric and total_rows > 0:
+                numeric_sums[key] = total_sum
+
+        summary_text = f"Total Rows: {total_rows}"
+        for col, val in numeric_sums.items():
+            summary_text += f" | {col.capitalize().replace('_', ' ')} Sum: {val:g}"
+        
+        self.summary_bar.setText(summary_text)
 
     def handle_cell_edited(self, item):
-        """Tracks adjustments to table elements instantly and commits them straight to database schemas."""
         if self._is_refreshing:
             return
 
         row = item.row()
         col = item.column()
-        new_value = item.text()
         field_key = self.schema[col]
 
-        # Prevent out-of-bounds errors if background calculations mismatch rows
         if row >= len(self.data):
             return
 
-        # Update runtime datasets
-        self.data[row][field_key] = new_value
+        self.data[row][field_key] = item.text()
 
-        # Automatically bump the mutation telemetry timestamp column if present
         if "last_checked" in self.schema:
             today = datetime.now().strftime("%Y-%m-%d")
             self.data[row]["last_checked"] = today
             
-            # Silently adjust UI visualization field
             self._is_refreshing = True
             time_col = self.schema.index("last_checked")
             time_item = self.table.item(row, time_col)
@@ -242,11 +289,12 @@ class InventoryPage(QWidget):
                 time_item.setText(today)
             self._is_refreshing = False
 
-        # Persist right away to encrypted backup arrays
         save_inventory(self.username, {"schema": self.schema, "data": self.data}, self.fernet, self.current_sheet_name)
+        self.update_summary_footer()
 
     def add_blank_row(self):
-        """Appends a row directly into the interface canvas grid for input."""
+        self.table.clearFocus()
+        
         new_item = {field: "" for field in self.schema}
         if "last_checked" in self.schema:
             new_item["last_checked"] = datetime.now().strftime("%Y-%m-%d")
@@ -254,29 +302,29 @@ class InventoryPage(QWidget):
         self.data.append(new_item)
         self.refresh_table()
         
-        # Put user focus right into the first cell of their new row
+        # Focus user right into the first cell of the new bottom row
         new_row_idx = self.table.rowCount() - 1
         self.table.setCurrentCell(new_row_idx, 0)
         self.table.editItem(self.table.item(new_row_idx, 0))
 
     def delete_row(self):
-        """Removes a row object array targeting from active parameters records."""
+        self.table.clearFocus()
         selected_row = self.table.currentRow()
         if selected_row == -1:
-            ghost_alert(self, "SYSTEM NOTICE", "No active item array target selected.")
+            ghost_alert(self, "SYSTEM NOTICE", "No active item selected.")
             return
             
-        confirm = ghost_alert(self, "CONFIRM PURGE", "Permanently excise selected row tracking telemetry records?")
-        if confirm:
+        if ghost_alert(self, "CONFIRM PURGE", "Permanently delete selected row?"):
             del self.data[selected_row]
             save_inventory(self.username, {"schema": self.schema, "data": self.data}, self.fernet, self.current_sheet_name)
             self.refresh_table()
 
     def create_new_sheet(self):
-        """Assembles another unique page layout across secure clusters mapping targets."""
-        name, ok = ghost_prompt(self, "NEW DESIGNATION DATA SHEET", "ASSIGN IDENTIFIER STRING CODE:")
+        self.table.clearFocus()
+        name, ok = ghost_prompt(self, "NEW DATA SHEET", "ASSIGN SHEET NAME:")
         if ok and name.strip():
             sheet_id = name.strip().lower().replace(" ", "_")
+            save_inventory(self.username, {"schema": self.schema, "data": self.data}, self.fernet, self.current_sheet_name)
             
             new_payload = {
                 "schema": ["name", "quantity", "location", "last_checked"], 
@@ -284,57 +332,98 @@ class InventoryPage(QWidget):
             }
             save_inventory(self.username, new_payload, self.fernet, sheet_id)
             self.current_sheet_name = sheet_id
-            self.load_sheet_list()
-            self.refresh_table()
+            self.load_sheet_list(load_default_data=True)
 
     def rename_current_sheet(self):
-        """Modifies identity metrics assigned directly onto underlying tracking logs data records files."""
+        self.table.clearFocus()
         if self.current_sheet_name == "inventory":
-            ghost_alert(self, "ACCESS REJECTED", "Primary root core inventory configuration datasets are system locked.")
+            ghost_alert(self, "ACCESS REJECTED", "Default inventory sheet cannot be renamed.")
             return
 
-        old_name_display = self.current_sheet_name.replace("_", " ").capitalize()
-        new_name, ok = ghost_prompt(self, "MUTATE SHEET DESIGNATION", "ENTER NEW PROFILE CODENAME:", placeholder=old_name_display)
+        old_name = self.current_sheet_name.replace("_", " ").capitalize()
+        new_name, ok = ghost_prompt(self, "RENAME SHEET", "ENTER NEW NAME:", placeholder=old_name)
         
         if ok and new_name.strip():
-            new_sheet_id = new_name.strip().lower().replace(" ", "_")
-            success, error = rename_inventory_file(self.username, self.current_sheet_name, new_sheet_id)
-            
+            new_id = new_name.strip().lower().replace(" ", "_")
+            success, error = rename_inventory_file(self.username, self.current_sheet_name, new_id)
             if success:
-                self.current_sheet_name = new_sheet_id
-                self.load_sheet_list()
+                self.current_sheet_name = new_id
+                self.load_sheet_list(load_default_data=True)
             else:
-                ghost_alert(self, "SYSTEM FAULT", f"Rename execution halted: {error}")
+                ghost_alert(self, "SYSTEM FAULT", f"Rename failed: {error}")
 
     def delete_current_sheet(self):
-        """Erases the physical data file completely and reverts safely to the root sheet."""
+        self.table.clearFocus()
         if self.current_sheet_name == "inventory":
-            ghost_alert(self, "ACCESS REJECTED", "Cannot delete core root logging manifest system maps.")
+            ghost_alert(self, "ACCESS REJECTED", "Cannot delete the default root sheet.")
             return
             
-        confirm = ghost_alert(self, "TERMINATE MANIFEST", f"Purge sheet profile database completely matching '{self.current_sheet_name}'?")
-        if not confirm: 
+        if not ghost_alert(self, "DELETE SHEET", f"Permanently delete '{self.current_sheet_name}'?"):
             return
             
         from inventory_manager import get_inventory_path
         filepath = get_inventory_path(self.username, self.current_sheet_name)
-        
         try:
             if os.path.exists(filepath):
                 os.remove(filepath)
-            
-            # Revert smoothly back to safety parameters array spaces
             self.current_sheet_name = "inventory"
-            self.load_sheet_list()
-            payload = load_inventory(self.username, self.fernet, self.current_sheet_name)
-            self.schema = payload.get("schema", ["name", "quantity", "location", "last_checked"])
-            self.data = payload.get("data", [])
-            self.refresh_table()
+            self.load_sheet_list(load_default_data=True)
         except Exception as e:
-            ghost_alert(self, "FATAL ERROR", f"Destruction execution failure mapping sequences: {e}")
+            ghost_alert(self, "FATAL ERROR", str(e))
+
+    def show_header_context_menu(self, pos: QPoint):
+        self.table.clearFocus()
+        col_index = self.table.horizontalHeader().logicalIndexAt(pos)
+        menu = QMenu(self)
+        
+        rename_action = QAction("Rename Column", self)
+        add_left_action = QAction("Insert Column Left", self)
+        add_right_action = QAction("Insert Column Right", self)
+        delete_action = QAction("Delete Column", self)
+        
+        menu.addAction(rename_action)
+        menu.addAction(add_left_action)
+        menu.addAction(add_right_action)
+        if len(self.schema) > 1:
+            menu.addAction(delete_action)
+            
+        action = menu.exec(self.table.horizontalHeader().mapToGlobal(pos))
+        if not action:
+            return
+
+        current_key = self.schema[col_index]
+
+        if action == rename_action:
+            new_col, ok = ghost_prompt(self, "RENAME COLUMN", "ENTER NEW COLUMN NAME:", placeholder=current_key)
+            if ok and new_col.strip():
+                new_key = new_col.strip().lower().replace(" ", "_")
+                self.schema[col_index] = new_key
+                for row in self.data:
+                    if current_key in row:
+                        row[new_key] = row.pop(current_key)
+                save_inventory(self.username, {"schema": self.schema, "data": self.data}, self.fernet, self.current_sheet_name)
+                self.refresh_table()
+
+        elif action in (add_left_action, add_right_action):
+            col_name, ok = ghost_prompt(self, "NEW COLUMN", "ENTER COLUMN NAME:")
+            if ok and col_name.strip():
+                new_key = col_name.strip().lower().replace(" ", "_")
+                insert_idx = col_index if action == add_left_action else col_index + 1
+                self.schema.insert(insert_idx, new_key)
+                for row in self.data:
+                    row[new_key] = ""
+                save_inventory(self.username, {"schema": self.schema, "data": self.data}, self.fernet, self.current_sheet_name)
+                self.refresh_table()
+
+        elif action == delete_action:
+            if ghost_alert(self, "DELETE COLUMN", f"Remove column '{current_key}' and its data?"):
+                self.schema.pop(col_index)
+                for row in self.data:
+                    row.pop(current_key, None)
+                save_inventory(self.username, {"schema": self.schema, "data": self.data}, self.fernet, self.current_sheet_name)
+                self.refresh_table()
 
     def filter_inventory(self, text):
-        """Evaluates content rows filtering hidden properties dynamically."""
         text = text.lower()
         for row in range(self.table.rowCount()):
             match = False
@@ -346,23 +435,20 @@ class InventoryPage(QWidget):
             self.table.setRowHidden(row, not match)
 
     def edit_columns(self):
-        """Alters dataset keys structurally modifying dictionary objects array entries framing variables."""
+        self.table.clearFocus()
         current_cols_text = "\n".join(self.schema)
-        dialog = TacticalDialog(self, title="SCHEMA PARAMETERS ADJUSTMENT", label="COLUMN DESIGNATIONS (ONE PER LINE):", is_multiline=True)
+        dialog = TacticalDialog(self, title="EDIT SCHEMA COLUMNS", label="COLUMN NAMES (ONE PER LINE):", is_multiline=True)
         dialog.input_field.setPlainText(current_cols_text)
         
         if dialog.exec() == QDialog.Accepted:
             cols = dialog.input_field.toPlainText()
             new_schema = [c.strip().lower().replace(" ", "_") for c in cols.split("\n") if c.strip()]
-            
-            if not new_schema: return
+            if not new_schema: 
+                return
 
             new_data = []
             for row in self.data:
-                if len(new_schema) == len(self.schema):
-                    updated_row = {new_schema[i]: row.get(self.schema[i], "") for i in range(len(new_schema))}
-                else:
-                    updated_row = {k: row.get(k, "") for k in new_schema}
+                updated_row = {k: row.get(k, "") for k in new_schema}
                 new_data.append(updated_row)
             
             self.data = new_data
@@ -371,24 +457,26 @@ class InventoryPage(QWidget):
             self.refresh_table()
 
     def export_csv(self):
+        self.table.clearFocus()
         try:
             current_sheet = self.tabs.tabText(self.tabs.currentIndex())
             save_path = export_inventory_to_csv(self.username, {"schema": self.schema, "data": self.data}, sheet_name=current_sheet)
-            ghost_alert(self, "EXPORT ARCHIVED", f"Data stream mapped directly outward via:\n{save_path}")
+            ghost_alert(self, "EXPORT SUCCESS", f"CSV exported to:\n{save_path}")
         except Exception as e:
-            ghost_alert(self, "EXPORT INTERRUPTED", str(e))
+            ghost_alert(self, "EXPORT ERROR", str(e))
 
     def import_csv(self):
+        self.table.clearFocus()
         try:
             current_sheet = self.tabs.tabText(self.tabs.currentIndex())
-            if not ghost_alert(self, "OVERWRITE RUNTIME CODES", f"Acknowledge import override command parameters targeting '{current_sheet}'?"):
+            if not ghost_alert(self, "IMPORT CSV", f"Overwrite current data in '{current_sheet}' with export file?"):
                 return  
 
             user_dir = os.path.join(INVENTORY_DIR, self.username)
             path = os.path.join(user_dir, f"inv_{self.current_sheet_name.lower()}_export.csv")
 
             if not os.path.exists(path):
-                ghost_alert(self, "DATA CORRUPTION STREAM", f"File path mapping failed. Drop matching csv to target field destination: {path}")
+                ghost_alert(self, "FILE NOT FOUND", f"Expected CSV at: {path}")
                 return
 
             with open(path, "r", encoding="utf-8") as f:
@@ -400,6 +488,6 @@ class InventoryPage(QWidget):
             self.data = new_data
             save_inventory(self.username, {"schema": self.schema, "data": self.data}, self.fernet, self.current_sheet_name)
             self.refresh_table()
-            ghost_alert(self, "UPLINK RESTORED", f"Synchronized tracking arrays for {len(new_data)} item units across {len(self.schema)} telemetry metrics.")
+            ghost_alert(self, "IMPORT SUCCESS", f"Imported {len(new_data)} rows successfully.")
         except Exception as e:
-            ghost_alert(self, "CRITICAL CONFLICT", str(e))
+            ghost_alert(self, "IMPORT ERROR", str(e))

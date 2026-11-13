@@ -12,11 +12,10 @@ from .style_config import (
     STYLE_CARD_HEURISTIC
 )
 
-# Logic/Path Imports (restored)
+# Logic/Path Imports
 from core.paths import USER_DATA, PROJECTS_DIR, INVENTORY_DIR, CORE_DIR, MODELS_DIR
 from project_manager import list_project_files
 from Everything_else.inventory_manager import list_inventory_sheets
-from core.peers_manager import load_peers
 from core.system_protocols import (
     get_disk_status, get_battery_status, get_primary_ip, get_system_uptime
 )
@@ -102,7 +101,7 @@ class ProfilePage(QWidget):
         metrics = [
             ("Vault Files", "vault_count", 0, 0), ("AI Models", "pass_count", 0, 1),
             ("Active Projects", "proj_count", 0, 2), ("Data Sheets", "inv_count", 0, 3),
-            ("Network", "net_count", 1, 0), ("Device Storage", "disk", 1, 1),
+            ("Core Traits", "traits_count", 1, 0), ("Device Storage", "disk", 1, 1),
             ("Battery", "batt", 1, 2), ("Local IP", "ip", 1, 3)
         ]
 
@@ -184,6 +183,7 @@ class ProfilePage(QWidget):
                 w = self.h_inputs[key]
                 w.setPlaceholderText(placeholder)
                 w.setStyleSheet(STYLE_HEURISTIC_INPUT)
+                w.textChanged.connect(self.refresh_stats) # Update metric live as user types
                 label = QLabel(label_text.upper())
                 label.setStyleSheet(f"color: {COLOR_TEXT_DIM}; font-size: 11px; font-weight: bold; border: none;")
                 h_form.addRow(label, w)
@@ -298,10 +298,6 @@ class ProfilePage(QWidget):
         footer.addWidget(self.save_btn)
         main_layout.addLayout(footer)
 
-
-
-
-
     # --- HELPER & REFRESH LOGIC ---
     def refresh_live_metrics(self):
         try:
@@ -321,17 +317,20 @@ class ProfilePage(QWidget):
                 v_files = [f for f in os.listdir(USER_DATA) if f.endswith('.dat')]
                 self.stat_labels["vault_count"].setText(str(len(v_files)))
             
-
             if os.path.exists(MODELS_DIR):
-                # We create a tuple of the extensions we want to track
                 valid_extensions = ('.gguf', '.pt')
                 m_files = [f for f in os.listdir(MODELS_DIR) if f.lower().endswith(valid_extensions)]
                 self.stat_labels["pass_count"].setText(str(len(m_files)))
 
-
             self.stat_labels["proj_count"].setText(str(len(list_project_files(self.username))))
             self.stat_labels["inv_count"].setText(str(len(list_inventory_sheets(self.username))))
-            self.stat_labels["net_count"].setText(str(len(load_peers(self.username, self.fernet))))
+            
+            # Count populated heuristic profile traits
+            if hasattr(self, 'h_inputs') and self.h_inputs:
+                filled_traits = sum(1 for w in self.h_inputs.values() if w.text().strip())
+                self.stat_labels["traits_count"].setText(str(filled_traits))
+            else:
+                self.stat_labels["traits_count"].setText("0")
         except Exception as e: 
             print(f"Stats Error: {e}")
 

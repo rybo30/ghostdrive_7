@@ -1,6 +1,6 @@
 # [ollie_page.py]
 
-import sys, os, glob
+import sys, os, glob, re
 import subprocess
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit,
@@ -80,7 +80,7 @@ class OlliePage(QWidget):
         self.recorder_frame = QFrame()
         self.recorder_frame.setStyleSheet(f"""
             QFrame {{
-                background-color: #090c10;  /* Dark charcoal/Black background */
+                background-color: #090c10;
                 border: 1px solid {COLOR_BORDER};
                 border-radius: 8px;
             }}
@@ -90,7 +90,6 @@ class OlliePage(QWidget):
         lay = QHBoxLayout(self.recorder_frame)
         lay.setContentsMargins(20, 0, 20, 0)
 
-        # Power Toggle
         self.record_btn = QPushButton("RECORD")
         self.record_btn.setCheckable(True)
         self.record_btn.setFixedSize(120, 45)
@@ -99,7 +98,6 @@ class OlliePage(QWidget):
         self.record_btn.clicked.connect(self.toggle_recording)
         lay.addWidget(self.record_btn)
 
-        # Telemetry Container - Force border: none here
         tel_container = QFrame()
         tel_container.setStyleSheet("border: none; background: transparent;") 
         tel_lay = QVBoxLayout(tel_container)
@@ -107,11 +105,11 @@ class OlliePage(QWidget):
         
         self.timer_label = QLabel("00:00:00")
         self.timer_label.setStyleSheet(f"color: {COLOR_FG}; font-family: 'Segoe UI Semibold'; font-size: 22px; border: none;")
-        self.timer_label.hide() # START HIDDEN
+        self.timer_label.hide()
         
         self.status_label = QLabel("READY TO RECORD")
         self.status_label.setStyleSheet(f"color: {T['PROTOCOL_GOLD']}; font-size: 10px; font-weight: bold; letter-spacing: 1px; border: none;")
-        self.status_label.show() # START VISIBLE
+        self.status_label.show()
 
         tel_lay.addWidget(self.timer_label)
         tel_lay.addWidget(self.status_label)
@@ -120,7 +118,6 @@ class OlliePage(QWidget):
         
         lay.addStretch()
 
-        # Utility Buttons
         util_deck = QHBoxLayout()
         util_deck.setSpacing(10)
         
@@ -238,25 +235,16 @@ class OlliePage(QWidget):
         """)
         self.search_bar.textChanged.connect(self.filter_history)
 
-        # --- THE CLEAN REBUILD ---
         self.history_list = QTreeWidget()
         self.history_list.setColumnCount(2)
         self.history_list.setHeaderHidden(True)
         self.history_list.setIndentation(0)
     
-        # --- THE FULL-CONTROL CONFIG ---
-        self.history_list.header().setStretchLastSection(False) # Prevent the last column from stretching
-        
-        # 1. Title: ResizeToContents allows it to be wider than the widget (enabling scroll)
+        self.history_list.header().setStretchLastSection(False)
         self.history_list.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        
-        # 2. Date: Fixed or ResizeToContents
         self.history_list.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        
-        # 3. Ensure the title at least fills the sidebar if it's short
         self.history_list.header().setMinimumSectionSize(150)
     
-        # Force horizontal scrollbar behavior
         self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
@@ -269,7 +257,6 @@ class OlliePage(QWidget):
                 color: {COLOR_FG}; outline: none; font-family: 'Segoe UI', sans-serif;
                 font-size: 12px; padding: 5px;
             }}
-            /* REMOVED HOVER: We only style the :selected state */
             QTreeWidget::item {{ 
                 padding: 12px; border-bottom: 1px solid #161b22;
                 color: {COLOR_FG};
@@ -278,9 +265,8 @@ class OlliePage(QWidget):
                 background: #1c2128; 
                 color: {COLOR_ACCENT}; 
                 font-weight: 700;
-                border-left: 3px solid {COLOR_ACCENT}; /* Adds a nice "active" indicator */
+                border-left: 3px solid {COLOR_ACCENT};
             }}
-            /* Force no hover color */
             QTreeWidget::item:hover {{ 
                 background: transparent; 
             }}
@@ -305,54 +291,40 @@ class OlliePage(QWidget):
         self.right_col.addWidget(self.refresh_btn)
 
     def filter_history(self, text):
-        """Filters the sidebar tree based on search text."""
         search_text = text.lower()
         for i in range(self.history_list.topLevelItemCount()):
             item = self.history_list.topLevelItem(i)
-            # Check title (column 0)
             should_hide = search_text not in item.text(0).lower()
             item.setHidden(should_hide)
 
-
     def refresh_history(self):
-        """Self-healing refresh: automatically prunes manifest entries with missing physical files."""
         self.history_list.clear()
         all_files = self.manifest.get_files()
-        
-        # Filter for report files
         reports = [f for f in all_files if f['name'].startswith("report_") and f['name'].endswith(".html.ghost")]
 
         from datetime import datetime
         manifest_was_pruned = False
-
-        # --- THE AGGRESSIVE PRUNER ---
         valid_reports = []
         for r in reports:
-            # Check if physical file exists
-            # If engine.file_exists returns False, the file is an orphan.
             if hasattr(self.engine, 'file_exists') and not self.engine.file_exists(r['id']):
-                print(f"DEBUG: Pruning orphan {r['name']} from manifest...")
                 self.manifest.remove_entry(r['id'])
                 manifest_was_pruned = True
                 continue
             valid_reports.append(r)
 
-        # Save the manifest if we cleaned up orphans
         if manifest_was_pruned and hasattr(self.manifest, 'save'):
             self.manifest.save()
 
-        # --- SORT: MOST RECENT TO LEAST RECENT ---
-        # Sorts the valid reports by 'created_at'. reverse=True ensures newest is first.
-        # Uses .get('created_at', 0) as a fallback if a file somehow lacks a timestamp.
         valid_reports.sort(key=lambda x: x.get('created_at', 0), reverse=True)
 
-        # --- UI RENDER (Using sorted, verified files) ---
         for r in valid_reports:
-            display_name = r['name'].replace("report_", "").replace(".html.ghost", "").replace("_", " ")
+            raw_filename = r['name'].replace("report_", "").replace(".html.ghost", "")
+            # Strip off trailing timestamp suffix (e.g. _1718293847) for display name
+            display_base = re.sub(r'_\d+$', '', raw_filename)
+            display_name = display_base.replace("_", " ").upper()
             
-            # Date Handling
             timestamp = r.get('created_at')
-            date_str = datetime.fromtimestamp(timestamp).strftime("%m/%d/%Y") if timestamp else "--/--/----"
+            date_str = datetime.fromtimestamp(timestamp).strftime("%m/%d/%Y %I:%M %p") if timestamp else "--/--/----"
 
             item = QTreeWidgetItem([display_name, date_str])
             item.setFont(0, QFont("Segoe UI Semibold", 10))
@@ -362,23 +334,18 @@ class OlliePage(QWidget):
             self.history_list.addTopLevelItem(item)
 
     def load_past_session(self, item):
-        """Decrypts the summary from the vault directly into memory for the UI."""
         file_id = item.data(0, Qt.UserRole)
         file_name = item.data(0, Qt.ItemDataRole.ToolTipRole)
         self.current_session_name = file_name.replace("report_", "").replace(".html.ghost", "")
 
         try:
-            # 1. Decrypt HTML summary directly to memory
             raw_data = self.engine.decrypt_file_to_memory(file_id)
             html_content = raw_data.decode("utf-8")
             
             self.results_area.setHtml(html_content)
             self.status_label.setText("ENCRYPTED SESSION LOADED")
-
-            # --- THE FIX: Re-enable the Analyze button when a session is selected ---
             self.analyze_btn.setEnabled(True) 
 
-            # 2. Check if the matching audio exists in vault for playback
             vault_audio_name = f"{self.current_session_name}.mp3"
             all_files = self.manifest.get_files()
             audio_entry = next((f for f in all_files if f['name'] == vault_audio_name), None)
@@ -406,7 +373,7 @@ class OlliePage(QWidget):
 
     def rename_session(self, item):
         old_report_path = item.data(Qt.UserRole)
-        new_name, ok = ghost_prompt(self, "RECLASSIFY", "ENTER NEW SESSION ALIAS:", placeholder=item.text())
+        new_name, ok = ghost_prompt(self, "RECLASSIFY", "ENTER NEW SESSION ALIAS:", placeholder=item.text(0))
         if ok and new_name:
             new_report_path = os.path.join(self.recordings_dir, f"report_{new_name}.html")
             try:
@@ -421,26 +388,31 @@ class OlliePage(QWidget):
                 ghost_alert(self, "SYSTEM ERROR", f"RENAME FAILED: {str(e)}")
 
     def delete_session(self, item):
-        """Force-removes an entry from the manifest even if the physical file is missing."""
         report_id = item.data(0, Qt.UserRole)
         report_name = item.data(0, Qt.ItemDataRole.ToolTipRole)
         
-        confirm = ghost_alert(self, "FORCE PURGE", f"REMOVE {item.text()} FROM MANIFEST?")
+        confirm = ghost_alert(self, "FORCE PURGE", f"REMOVE {item.text(0)} AND ALL ASSOCIATED VAULT FILES?")
         if confirm:
             try:
-                # 1. Identify associated audio
+                all_files = self.manifest.get_files()
+                
+                report_entry = next((f for f in all_files if f['id'] == report_id), None)
+                if report_entry:
+                    report_file_path = os.path.join(USER_DATA, report_entry['id'])
+                    if os.path.exists(report_file_path):
+                        os.remove(report_file_path)
+                    self.manifest.remove_entry(report_id)
+
                 base_name = report_name.replace("report_", "").replace(".html.ghost", "")
                 vault_audio_name = f"{base_name}.mp3"
-                
-                all_files = self.manifest.get_files()
                 audio_entry = next((f for f in all_files if f['name'] == vault_audio_name), None)
                 
-                # 2. Remove both from manifest (regardless of if they exist on disk)[cite: 1]
                 if audio_entry:
+                    audio_file_path = os.path.join(USER_DATA, audio_entry['id'])
+                    if os.path.exists(audio_file_path):
+                        os.remove(audio_file_path)
                     self.manifest.remove_entry(audio_entry['id'])
-                self.manifest.remove_entry(report_id)
 
-                # 3. Save changes[cite: 1]
                 if hasattr(self.manifest, 'save'):
                     self.manifest.save() 
                 
@@ -466,7 +438,6 @@ class OlliePage(QWidget):
         else:
             self.timer_label.setStyleSheet(f"color: {COLOR_FG}; font-family: 'Consolas'; font-size: 14px; font-weight: bold;")
 
-
     def start_session(self):
         name, ok = ghost_prompt(self, "INITIALIZE PACKET", "SESSION NAME:", placeholder="Neural_Log")
         if not ok:
@@ -476,9 +447,8 @@ class OlliePage(QWidget):
         self.is_recording = True
         self.recording_time = 0
         
-        # --- UI SWAP ---
-        self.status_label.hide()     # Hide text
-        self.timer_label.show()      # Show timer
+        self.status_label.hide()
+        self.timer_label.show()
         
         self.timer.start(1000)
         self.update_btn_style(True)
@@ -534,9 +504,8 @@ class OlliePage(QWidget):
         self.is_recording = False
         self.timer.stop()
         
-        # --- UI SWAP BACK ---
-        self.timer_label.hide()      # Hide timer
-        self.status_label.show()     # Show text
+        self.timer_label.hide()
+        self.status_label.show()
         self.status_label.setText("SESSION TERMINATED")
         
         if hasattr(self, 'worker'): 
@@ -551,26 +520,19 @@ class OlliePage(QWidget):
         self.update_btn_style(False)
         self.record_btn.setChecked(False)
 
-        # Check if we got back full HTML (Analysis Mode) or just a signal (Record Mode)
         if result_data.startswith("<html>") or "<style>" in result_data:
             self.results_area.setHtml(result_data)
             self.status_label.setText("ANALYSIS COMPLETE")
-            # Keep buttons enabled so we can re-run or play back
             self.analyze_btn.setEnabled(True)
             self.play_session_btn.setEnabled(True)
         else:
-            # It's just a "RECORDING_COMPLETE" signal
             self.status_label.setText("SESSION SECURED")
             self.results_area.setHtml(
                 "<h2 style='color:#ffb000;'>RECORDING SECURED</h2>"
                 "<p>Select the session from the log and click 'ANALYZE' to generate the intelligence brief.</p>"
             )
-            # After a fresh record, we disable these until the user selects the item in the sidebar
             self.analyze_btn.setEnabled(False)
             self.play_session_btn.setEnabled(False)
     
-        # Refresh history to show the new "Pending" or "Complete" file
         self.refresh_history()
-        
-        # Deselect items so the user is forced to click the fresh entry to 'load' it
         self.history_list.clearSelection()

@@ -873,34 +873,32 @@ class ChatPage(QWidget):
                 "timestamp": os.time() if hasattr(os, 'time') else __import__('time').time()
             })
 
+
             # 4. SECURE AUTO-SAVE COMMIT PIPELINE
             try:
-                # Fallback Title generation based on the initial prompt if a real one isn't set yet
-                session_title = "Secure Analysis Session"
-                if len(self.chat_history_data) >= 1:
-                    first_msg = self.chat_history_data[0].get("content", "")
-                    session_title = first_msg[:30].strip() + "..." if len(first_msg) > 30 else first_msg
+                # Grab the active sidebar item's title so we don't overwrite manual renames or custom session titles
+                current_item = self.history_list.currentItem()
+                current_custom_name = current_item.text() if current_item else None
 
-                # Write changes back through your ChatLogManager to handle encryption mechanics
+                # Write changes back through your ChatLogManager, retaining the active title
                 new_session_id = self.chat_manager.save_chatlog(
                     history=self.chat_history_data,
-                    name=session_title,
+                    name=current_custom_name,
                     log_id=self.current_session_id
                 )
                 
-                # If this was a brand-new chat block, retain the generated persistent log ID tracking reference
                 if not self.current_session_id:
                     self.current_session_id = new_session_id
 
-                # Ensure the root manifest commits the asset metadata table changes to disk
                 if hasattr(self.manifest, 'save'):
                     self.manifest.save()
 
-                # Refresh your visual archive list sidebar module immediately to reflect state changes
                 self.refresh_history_list()
 
             except Exception as save_err:
                 print(f"[STORAGE ERROR] Cryptographic write operation failed: {save_err}")
+
+
 
         # Clean up worker memory states completely
         if self._active_thread:

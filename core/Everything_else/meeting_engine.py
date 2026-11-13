@@ -27,10 +27,19 @@ class MeetingWorker(QThread):
         self.recording_queue = queue.Queue()
         self.is_running = True
         self.recordings_dir = os.path.join(USER_DATA, "recordings")
+        os.makedirs(self.recordings_dir, exist_ok=True)
         
-        # Define base name and paths
+        # Define base name and paths with unique timestamp collision prevention
         raw_alias = str(custom_name) if custom_name else "session"    
-        self.base_name = re.sub(r'[^\w\s-]', '', raw_alias).strip().replace(" ", "_")
+        clean_alias = re.sub(r'[^\w\s-]', '', raw_alias).strip().replace(" ", "_")
+        
+        # If analyzing an existing session, preserve its unique timestamp suffix; otherwise create a new one
+        if re.search(r'_\d+$', clean_alias):
+            self.base_name = clean_alias
+        else:
+            self.timestamp_suffix = int(time.time())
+            self.base_name = f"{clean_alias}_{self.timestamp_suffix}"
+
         self.audio_path = os.path.join(self.recordings_dir, f"{self.base_name}.wav")
         self.report_path = os.path.join(self.recordings_dir, f"report_{self.base_name}.html")
 
@@ -119,7 +128,7 @@ class MeetingWorker(QThread):
             
             # 2. Transcribe
             self.status_signal.emit("OLLIE IS TRANSCRIBING...")
-            self.progress_signal.emit(35) 
+            self.progress_signal.emit(30) 
             model = whisper.load_model("large-v3-turbo", download_root=MODELS_DIR)
             result = model.transcribe(temp_mp3, fp16=False)
             full_transcript = result['text']
@@ -130,23 +139,15 @@ class MeetingWorker(QThread):
                 torch.cuda.empty_cache() 
             gc.collect() 
 
-            # 3. Analyze / Synthesis
-            self.progress_signal.emit(75) 
-            self.status_signal.emit("OLLIE IS SYNTHESIZING...")
+            # 3. Hierarchical Map-Reduce Analysis & Synthesis Engine
+            self.status_signal.emit("RUNNING HIERARCHICAL SYNTHESIS...")
+            self.progress_signal.emit(60)
             
-            # Use the correct identifier and unpack the 2-tuple return
-            jynx_fn, _ = load_model_from_config("jynx_default") 
+            jynx_fn, _ = load_model_from_config("jynx_default")
+            full_analysis = self._execute_hierarchical_synthesis(full_transcript, jynx_fn)
             
-            prompt = f"Summarize this meeting transcript and extract action items:\n\n{full_transcript}"
-            
-            # Call the function directly as you did in the working version
-            raw_response = jynx_fn(prompt, stream_override=False) 
-            
-            if isinstance(raw_response, dict) and 'choices' in raw_response:
-                full_analysis = raw_response['choices'][0]['text'].strip()
-            else:
-                full_analysis = str(raw_response).strip()
-            
+            self.progress_signal.emit(90)
+            self.status_signal.emit("FORMATTING INTELLIGENCE BRIEF...")
             report_html = self.format_report(full_transcript, full_analysis)
             
             # --- VAULT STORAGE FOR SUMMARY ---
@@ -161,7 +162,7 @@ class MeetingWorker(QThread):
             if old_entry:
                 self.manifest.remove_entry(old_entry['id'])
 
-            # Now encrypt the real summary
+            # Encrypt the summary
             sid, s_size = self.engine.encrypt_file(temp_html_path)
             self.manifest.add_entry(
                 name=report_name, 
@@ -171,22 +172,81 @@ class MeetingWorker(QThread):
                 folder="Meetings"
             )
 
-            # CLEANUP: Remove all local traces immediately
+            # CLEANUP: Remove local traces immediately
             if os.path.exists(temp_mp3): os.remove(temp_mp3)
             if os.path.exists(temp_html_path): os.remove(temp_html_path)
 
-            # Signal the UI with the HTML string directly so it can display it
+            self.progress_signal.emit(100)
             self.result_signal.emit(report_html)
             self.status_signal.emit("ANALYSIS COMPLETE • SECURED")
             
         except Exception as e:
             self.result_signal.emit(f"Analysis Failed: {e}")
 
+    def _execute_hierarchical_synthesis(self, transcript: str, llm_fn, safe_limit: int = 3000, chunk_words: int = 2200) -> str:
+        words = transcript.split()
+        total_words = len(words)
+
+        if total_words <= safe_limit:
+            prompt = f"Summarize this meeting transcript thoroughly, highlighting key themes, insights, emotional tone, and action items:\n\n{transcript}"
+            return self._call_llm(prompt, llm_fn)
+
+        chunks = self._chunk_text(words, chunk_size=chunk_words, overlap=150)
+        total_chunks = len(chunks)
+
+        chunk_summaries = []
+        for idx, chunk in enumerate(chunks):
+            self.status_signal.emit(f"SUMMARIZING SEGMENT {idx + 1} OF {total_chunks}...")
+            prompt = (
+                f"You are analyzing part {idx + 1} of {total_chunks} of a meeting transcript. "
+                f"Provide a thorough summary of this specific segment, highlighting key discussions, "
+                f"insights, emotional notes, and decisions or action items:\n\n{chunk}\n\nSegment Summary:"
+            )
+            summary = self._call_llm(prompt, llm_fn, max_tokens=1024)
+            chunk_summaries.append(summary)
+
+        combined_summaries = "\n\n---\n\n".join([f"[Part {i+1} Summary]:\n{s}" for i, s in enumerate(chunk_summaries)])
+        summary_word_count = len(combined_summaries.split())
+
+        if summary_word_count > safe_limit:
+            self.status_signal.emit("RUNNING RECURSIVE META-SYNTHESIS...")
+            return self._execute_hierarchical_synthesis(combined_summaries, llm_fn, safe_limit, chunk_words)
+
+        self.status_signal.emit("GENERATING UNIFIED MASTER REPORT...")
+        master_prompt = (
+            "You are an expert analytical assistant. Below are sequential segment summaries from a comprehensive meeting. "
+            "Synthesize these into a single, unified, structured master meeting report with clear headings: "
+            "Executive Overview, Key Themes & Discussions, Emotional/Behavioral Notes, and Action Items / Takeaways.\n\n"
+            f"{combined_summaries}\n\nUnified Master Report:"
+        )
+        return self._call_llm(master_prompt, llm_fn, max_tokens=2048)
+
+    def _chunk_text(self, words: list, chunk_size: int = 2200, overlap: int = 150) -> list:
+        total_words = len(words)
+        chunks = []
+        start_idx = 0
+
+        while start_idx < total_words:
+            end_idx = min(start_idx + chunk_size, total_words)
+            chunk_words = words[start_idx:end_idx]
+            chunks.append(" ".join(chunk_words))
+            start_idx += (chunk_size - overlap)
+
+        return chunks
+
+    def _call_llm(self, prompt: str, llm_fn, max_tokens: int = 1536) -> str:
+        try:
+            raw_response = llm_fn(prompt, stream_override=False, max_tokens=max_tokens, temperature=0.3)
+            if isinstance(raw_response, dict) and 'choices' in raw_response:
+                return raw_response['choices'][0]['text'].strip()
+            return str(raw_response).strip()
+        except Exception as e:
+            return f"[Inference Error: {str(e)}]"
+
     def format_report(self, transcript, analysis):
         import datetime
         timestamp = datetime.datetime.now().strftime("%B %d, %Y | %I:%M %p")
-        # Clean up the base name for the header
-        display_name = self.base_name.replace('_', ' ').upper()
+        display_name = re.sub(r'_\d+$', '', self.base_name).replace('_', ' ').upper()
         
         report_css = f"""
         <style>

@@ -27,40 +27,42 @@ class ChatLogManager:
         }
         json_str = json.dumps(chat_data).encode('utf-8')
 
-        # 2. Use a generic temp name (doesn't matter, it gets deleted)
+        # 2. Use a generic temp name
         temp_path = os.path.join(USER_DATA, "temp_vault_payload.dat")
         
         try:
             with open(temp_path, "wb") as f:
                 f.write(json_str)
 
-            # 3. ENCRYPT AND GET THE ACTUAL FILENAME
-            # engine.encrypt_file returns (new_filename, size)
+            # 3. Encrypt file
             actual_ghost_id, size = self.engine.encrypt_file(temp_path)
             
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
-            # 4. Resolve Name
-            if not name:
-                # If we are updating an existing log, try to keep the name
-                if log_id:
-                    manifest_files = self.manifest.get_files()
-                    name = next((f["name"] for f in manifest_files if f["id"] == log_id), None)
-                
-                # Fallback to timestamp
-                if not name:
+            # 4. Resolve Name intelligently without overwriting user custom names
+            manifest_files = self.manifest.get_files()
+            existing_entry = next((f for f in manifest_files if f["id"] == log_id), None) if log_id else None
+
+            if existing_entry and not name:
+                # Keep the existing name if the log already exists and no explicit new name was passed
+                name = existing_entry["name"]
+            elif not name:
+                # Fallback title generation for brand new logs
+                if len(history) >= 1:
+                    first_msg = history[0].get("content", "")
+                    clean_txt = re.sub(r'<[^<]+?>', '', first_msg).strip()
+                    name = (clean_txt[:28] + '...') if len(clean_txt) > 28 else (clean_txt if clean_txt else f"Session {datetime.now().strftime('%m-%d %H:%M')}")
+                else:
                     name = f"Session {datetime.now().strftime('%m-%d %H:%M')}"
 
             # 5. Manifest Sync
-            # If log_id exists, we are replacing an old session with a new encrypted file
             if log_id:
                 self.manifest.remove_entry(log_id)
-                # Note: You might want to delete the actual old file from USER_DATA here too
             
             self.manifest.add_entry(
                 name=name,
-                id=actual_ghost_id, # This is the 'ghost_xxx.dat' string
+                id=actual_ghost_id,
                 size=size,
                 file_type="chatlog",
                 folder="Chatlogs"
@@ -71,6 +73,8 @@ class ChatLogManager:
         except Exception as e:
             print(f"CRITICAL SAVE ERROR: {e}")
             return log_id
+
+
 
     def load_chatlog(self, ghost_id):
         """Decrypts and returns the chat history list."""
