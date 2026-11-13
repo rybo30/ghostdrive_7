@@ -4,9 +4,10 @@ import os
 import csv
 import json
 from cryptography.fernet import Fernet
-from core.paths import EVERYTHING_ELSE
+from core.paths import EVERYTHING_ELSE, INVENTORY_DIR
 
-INVENTORY_BASE = os.path.join(EVERYTHING_ELSE, "inventory")
+# Alias INVENTORY_BASE to INVENTORY_DIR from paths.py for 100% sync
+INVENTORY_BASE = INVENTORY_DIR
 os.makedirs(INVENTORY_BASE, exist_ok=True)
 
 DEFAULT_SCHEMA = ["name", "quantity", "location", "last_checked"]
