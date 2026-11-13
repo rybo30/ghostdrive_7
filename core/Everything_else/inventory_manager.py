@@ -38,7 +38,7 @@ def rename_inventory_file(username, old_id, new_id):
     new_path = get_inventory_path(username, new_id)
     
     if not os.path.exists(old_path):
-        return False, f"Source sheet not found: {old_id}"
+        return False, f"Source file not found: {old_id}"
     if os.path.exists(new_path):
         return False, "A sheet with that name already exists."
     
@@ -95,3 +95,25 @@ def export_inventory_to_csv(username, payload, sheet_name="inventory", path=None
         writer.writeheader()
         writer.writerows(data)
     return path
+
+def import_inventory_from_csv(username, fernet: Fernet, target_payload, sheet_name="inventory", path=None):
+    """Imports CSV rows into an encrypted inventory sheet and updates target payload."""
+    if path is None:
+        user_dir = os.path.join(INVENTORY_BASE, username)
+        path = os.path.join(user_dir, f"inv_{sheet_name.lower()}_export.csv")
+
+    if not os.path.exists(path):
+        return False, f"CSV file not found: {path}"
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            new_data = list(reader)
+            detected_schema = list(reader.fieldnames) if reader.fieldnames else target_payload.get("schema", DEFAULT_SCHEMA)
+
+        target_payload["schema"] = detected_schema
+        target_payload["data"] = new_data
+        save_inventory(username, target_payload, fernet, sheet_name)
+        return True, len(new_data)
+    except Exception as e:
+        return False, str(e)
