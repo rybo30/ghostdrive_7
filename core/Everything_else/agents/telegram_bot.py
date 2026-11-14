@@ -1,6 +1,5 @@
 # core/Everything_else/agents/telegram_bot.py
 
-
 import os
 import sys
 import time
@@ -16,7 +15,9 @@ import signal
 import urllib.error
 import urllib.request
 import urllib.parse
+from pathlib import Path
 from typing import Optional, Callable, Dict, Any, List
+from cryptography.fernet import Fernet
 
 from core.paths import AGENT_CONFIGS_DIR, EVERYTHING_ELSE, HOST_HIDDEN_DIR
 from core.Everything_else.agents.ram_manager import RAMManager

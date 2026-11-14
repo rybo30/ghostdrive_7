@@ -398,6 +398,8 @@ class MultiAgentDaemonHUD(QWidget):
         self.ram_mgr.start_monitoring()
         self.tool_runner = AgentToolRunner(ram_manager=self.ram_mgr)
 
+        runtime_dir = Path(get_agent_runtime_dir()).resolve()
+
         for agent_id, config in self.agent_configs.items():
             token = config.get("telegram_bot_token") or config.get("bot_token")
             agent_name = config.get("agent_name", agent_id)
@@ -415,17 +417,24 @@ class MultiAgentDaemonHUD(QWidget):
                 )
 
             db_filename = f"{agent_id}_state.db"
+            
+            # Locate matching key file for database encryption
+            key_candidates = list(runtime_dir.glob(f"*{agent_id}*.key"))
+            key_path = str(key_candidates[0]) if key_candidates else None
 
             gateway = TelegramBotGateway(
                 bot_token=token,
                 ram_manager=self.ram_mgr,
                 task_processor=make_processor(config),
                 db_name=db_filename,
+                key_path=key_path,
                 shutdown_callback=self.trigger_daemon_kill_switch
             )
             gateway.start()
             self.gateways[agent_id] = gateway
-            logging.info(f"Telegram Gateway wired & active for agent '{agent_name}' with DB '{db_filename}'.")
+            logging.info(f"Telegram Gateway wired & active for agent '{agent_name}' with encrypted state support.")
+
+
 
     def process_incoming_task(self, agent_config: dict, prompt: str, chat_id: int, user_history: list = None) -> list:
         agent_name = agent_config.get("agent_name", "Agent")
