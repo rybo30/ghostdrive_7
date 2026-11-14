@@ -31,11 +31,9 @@ logger = logging.getLogger("TelegramBotGateway")
 
 class TelegramQueueDB:
     def __init__(self, db_path: str, key_path: Optional[str] = None):
-        # Force the database storage to strictly use .enc instead of .db
         base_path = Path(db_path).with_suffix("")
         self.enc_path = Path(str(base_path) + ".enc")
         
-        # Clean up any leftover legacy unencrypted .db files from previous runs
         legacy_db_path = Path(str(base_path) + ".db")
         if legacy_db_path.exists():
             try:
@@ -49,38 +47,39 @@ class TelegramQueueDB:
         else:
             self.key_path = self.enc_path.with_suffix(".key")
 
-        self.conn = sqlite3.connect(":memory:")
+        self.db_lock = threading.Lock()
+        # Allow connection sharing across background threads
+        self.conn = sqlite3.connect(":memory:", check_same_thread=False)
         self._load_and_decrypt_or_initialize()
 
     def _get_connection(self):
         return self.conn
 
     def _load_and_decrypt_or_initialize(self):
-        try:
-            if self.enc_path.exists() and self.key_path.exists():
-                # Decrypt existing encrypted state into RAM
-                with open(self.key_path, "rb") as k_file:
-                    key_bytes = k_file.read().strip()
-                
-                with open(self.enc_path, "rb") as e_file:
-                    encrypted_data = e_file.read()
-                
-                fernet = Fernet(key_bytes)
-                decrypted_bytes = fernet.decrypt(encrypted_data)
-                
-                temp_conn = sqlite3.connect(":memory:")
-                temp_conn.deserialize(decrypted_bytes)
-                self.conn = temp_conn
-                logger.info(f"[DB] Successfully decrypted and loaded conversation state from {self.enc_path.name}")
-            else:
-                # Fully encrypted from launch: Create fresh schema and immediately write encrypted .enc to disk
-                logger.info(f"[DB] Initializing fresh encrypted conversation state at launch: {self.enc_path.name}")
+        with self.db_lock:
+            try:
+                if self.enc_path.exists() and self.key_path.exists():
+                    with open(self.key_path, "rb") as k_file:
+                        key_bytes = k_file.read().strip()
+                    
+                    with open(self.enc_path, "rb") as e_file:
+                        encrypted_data = e_file.read()
+                    
+                    fernet = Fernet(key_bytes)
+                    decrypted_bytes = fernet.decrypt(encrypted_data)
+                    
+                    temp_conn = sqlite3.connect(":memory:", check_same_thread=False)
+                    temp_conn.deserialize(decrypted_bytes)
+                    self.conn = temp_conn
+                    logger.info(f"[DB] Successfully decrypted and loaded conversation state from {self.enc_path.name}")
+                else:
+                    logger.info(f"[DB] Initializing fresh encrypted conversation state at launch: {self.enc_path.name}")
+                    self._init_schema()
+                    self.save_and_encrypt()
+            except Exception as e:
+                logger.warning(f"[DB] Failed to decrypt state database, initializing fresh encrypted DB: {e}")
                 self._init_schema()
                 self.save_and_encrypt()
-        except Exception as e:
-            logger.warning(f"[DB] Failed to decrypt state database, initializing fresh encrypted DB: {e}")
-            self._init_schema()
-            self.save_and_encrypt()
 
     def _init_schema(self):
         cursor = self.conn.cursor()
@@ -101,128 +100,131 @@ class TelegramQueueDB:
     def save_and_encrypt(self):
         if not self.key_path.exists():
             return
-        try:
-            with open(self.key_path, "rb") as k_file:
-                key_bytes = k_file.read().strip()
-            
-            # Serialize in-memory database bytes and encrypt with Fernet
-            serialized_data = self.conn.serialize()
-            fernet = Fernet(key_bytes)
-            encrypted_data = fernet.encrypt(serialized_data)
-            
-            # Write strictly to the encrypted .enc file
-            with open(self.enc_path, "wb") as f:
-                f.write(encrypted_data)
-            logger.info(f"[DB] Successfully encrypted and saved conversation state to {self.enc_path.name}")
-        except Exception as e:
-            logger.error(f"[DB] Failed to encrypt and save state database: {e}")
+        with self.db_lock:
+            try:
+                with open(self.key_path, "rb") as k_file:
+                    key_bytes = k_file.read().strip()
+                
+                serialized_data = self.conn.serialize()
+                fernet = Fernet(key_bytes)
+                encrypted_data = fernet.encrypt(serialized_data)
+                
+                with open(self.enc_path, "wb") as f:
+                    f.write(encrypted_data)
+            except Exception as e:
+                logger.error(f"[DB] Failed to encrypt and save state database: {e}")
 
     def enqueue_message(self, chat_id: int, message_id: int, user_name: str, message_text: str) -> int:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO message_queue (chat_id, message_id, user_name, message_text, status)
-                VALUES (?, ?, ?, ?, 'PENDING')
-            """, (chat_id, message_id, user_name, message_text))
-            conn.commit()
-            task_id = cursor.lastrowid
-        
-        # Re-encrypt immediately when a message is received and queued
+        with self.db_lock:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO message_queue (chat_id, message_id, user_name, message_text, status)
+                    VALUES (?, ?, ?, ?, 'PENDING')
+                """, (chat_id, message_id, user_name, message_text))
+                conn.commit()
+                task_id = cursor.lastrowid
         self.save_and_encrypt()
         return task_id
 
     def fetch_next_pending(self) -> Optional[Dict[str, Any]]:
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT * FROM message_queue WHERE status = 'PENDING' ORDER BY id ASC LIMIT 1
-            """)
-            row = cursor.fetchone()
-            if row:
-                return dict(row)
-            return None
+        with self.db_lock:
+            with self._get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT * FROM message_queue WHERE status = 'PENDING' ORDER BY id ASC LIMIT 1
+                """)
+                row = cursor.fetchone()
+                if row:
+                    return dict(row)
+                return None
 
     def update_status(self, task_id: int, status: str, response_text: str = ""):
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE message_queue 
-                SET status = ?, response_text = ?
-                WHERE id = ?
-            """, (status, response_text, task_id))
-            conn.commit()
-            
-        # Re-encrypt immediately after a message/response is fully processed and sent
+        with self.db_lock:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE message_queue 
+                    SET status = ?, response_text = ?
+                    WHERE id = ?
+                """, (status, response_text, task_id))
+                conn.commit()
         self.save_and_encrypt()
 
     def mark_old_shutdowns_cleared(self):
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE message_queue
-                SET status = 'SKIPPED', response_text = 'Ignored historical shutdown command.'
-                WHERE status = 'PENDING' AND TRIM(message_text) = '/shutdown'
-            """)
-            conn.commit()
+        with self.db_lock:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE message_queue
+                    SET status = 'SKIPPED', response_text = 'Ignored historical shutdown command.'
+                    WHERE status = 'PENDING' AND TRIM(message_text) = '/shutdown'
+                """)
+                conn.commit()
         self.save_and_encrypt()
 
     def reset_stuck_tasks(self):
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE message_queue
-                SET status = 'FAILED', response_text = 'Reset on system restart.'
-                WHERE status = 'PROCESSING'
-            """)
-            conn.commit()
+        with self.db_lock:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE message_queue
+                    SET status = 'FAILED', response_text = 'Reset on system restart.'
+                    WHERE status = 'PROCESSING'
+                """)
+                conn.commit()
         self.save_and_encrypt()
 
     def get_recent_user_messages(self, chat_id: int, current_task_id: int, limit: int = 2) -> List[str]:
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT message_text FROM message_queue 
-                WHERE chat_id = ? AND id < ?
-                ORDER BY id DESC LIMIT ?
-            """, (chat_id, current_task_id, limit))
-            rows = cursor.fetchall()
-            return [row["message_text"] for row in reversed(rows)]
+        with self.db_lock:
+            with self._get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT message_text FROM message_queue 
+                    WHERE chat_id = ? AND id < ?
+                    ORDER BY id DESC LIMIT ?
+                """, (chat_id, current_task_id, limit))
+                rows = cursor.fetchall()
+                return [row["message_text"] for row in reversed(rows)]
 
     def close(self):
-        try:
-            self.save_and_encrypt()
-            if self.conn:
-                self.conn.close()
-        except Exception:
-            pass
+        with self.db_lock:
+            try:
+                self.save_and_encrypt()
+                if self.conn:
+                    self.conn.close()
+            except Exception:
+                pass
 
     def get_recent_history(self, chat_id: int, limit: int = 5) -> List[Dict[str, str]]:
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT user_name, message_text, response_text 
-                FROM message_queue 
-                WHERE chat_id = ? AND status = 'COMPLETED'
-                ORDER BY id DESC LIMIT ?
-            """, (chat_id, limit))
-            rows = cursor.fetchall()
-        
-            history = []
-            for row in reversed(rows):
-                history.append({"role": "user", "text": row["message_text"]})
-                if row["response_text"]:
-                    history.append({"role": "assistant", "text": row["response_text"]})
-            return history
+        with self.db_lock:
+            with self._get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT user_name, message_text, response_text 
+                    FROM message_queue 
+                    WHERE chat_id = ? AND status = 'COMPLETED'
+                    ORDER BY id DESC LIMIT ?
+                """, (chat_id, limit))
+                rows = cursor.fetchall()
+            
+                history = []
+                for row in reversed(rows):
+                    history.append({"role": "user", "text": row["message_text"]})
+                    if row["response_text"]:
+                        history.append({"role": "assistant", "text": row["response_text"]})
+                return history
 
     def get_last_active_chat_id(self) -> Optional[int]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT chat_id FROM message_queue ORDER BY id DESC LIMIT 1")
-            row = cursor.fetchone()
-            return row[0] if row else None
+        with self.db_lock:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT chat_id FROM message_queue ORDER BY id DESC LIMIT 1")
+                row = cursor.fetchone()
+                return row[0] if row else None
 
 
 
