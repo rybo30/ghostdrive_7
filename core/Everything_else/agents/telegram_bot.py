@@ -47,8 +47,8 @@ class TelegramQueueDB:
         else:
             self.key_path = self.enc_path.with_suffix(".key")
 
-        self.db_lock = threading.Lock()
-        # Allow connection sharing across background threads
+        # Use RLock (Reentrant Lock) to prevent self-deadlocks when nested methods acquire the lock
+        self.db_lock = threading.RLock()
         self.conn = sqlite3.connect(":memory:", check_same_thread=False)
         self._load_and_decrypt_or_initialize()
 
